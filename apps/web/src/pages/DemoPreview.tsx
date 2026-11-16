@@ -1,6 +1,7 @@
 import {useMemo,useState} from 'react';
 import {Activity,ArrowRight,BarChart3,Bell,BookOpen,CheckCircle2,ChevronRight,Clapperboard,Clock3,CloudCog,CreditCard,Database,Download,Filter,Globe2,KeyRound,LayoutDashboard,Menu,MessageSquareText,RefreshCw,Search,Send,ServerCog,Settings2,ShieldCheck,ShoppingBag,UsersRound,UserRound,WalletCards,X} from 'lucide-react';
 import {LanguageSelect,useI18n} from '../i18n';
+import {TrendDateFilter,TrendLineCharts,useTrendDates,sampleTrends,type Metric} from '../components/OperationsTrends';
 import './demo-preview.css';
 
 type Tab='overview'|'staff'|'users'|'ledger'|'investigations'|'inbox'|'apiHealth'|'settings';
@@ -71,6 +72,8 @@ const saveCsv=(filename:string,headers:string[],rows:(string|number|null)[][])=>
 export function DemoPreview({view}:{view:'backend'}){
  const {t,locale}=useI18n();
  const [tab,setTab]=useState<Tab>('overview'),[role,setRole]=useState<Role>('super_admin'),[mobile,setMobile]=useState(false);
+ const overviewDates=useTrendDates();
+ const overviewTrends=useMemo(()=>sampleTrends(overviewDates.range),[overviewDates.range]);
  const [text,setText]=useState(''),[status,setStatus]=useState(''),[kind,setKind]=useState(''),[workspace,setWorkspace]=useState(''),[from,setFrom]=useState(''),[until,setUntil]=useState(''),[page,setPage]=useState(0);
  const [user,setUser]=useState<User|null>(null),[staff,setStaff]=useState(startingStaff),[selectedStaff,setSelectedStaff]=useState(''),[staffRole,setStaffRole]=useState<Role>('analyst');
  const [threads,setThreads]=useState(seedThreads),[threadChannel,setThreadChannel]=useState<'internal'|'customer'>('internal'),[threadId,setThreadId]=useState(seedThreads[3].id),[message,setMessage]=useState(''),[newThread,setNewThread]=useState(''),[newThreadOpen,setNewThreadOpen]=useState(false);
@@ -122,18 +125,17 @@ export function DemoPreview({view}:{view:'backend'}){
    <header className="ep-topbar"><div className="ep-top-left"><button className="ep-menu-btn" onClick={()=>setMobile(true)} aria-label="Open menu"><Menu size={20}/></button><span>{t('adminConsoleEnterprise')}</span><ChevronRight size={14}/><b>{t(labels[tab])}</b></div><div className="ep-top-actions"><div className="ep-role-switch"><ShieldCheck size={15}/><select aria-label={t('adminRoleDemo')} value={role} onChange={e=>switchRole(e.target.value as Role)}>{(Object.keys(roleNames) as Role[]).map(r=><option key={r} value={r}>{t(roleNames[r])}</option>)}</select></div><LanguageSelect compact/><button className="ep-notification" onClick={()=>changeTab('inbox')} title={t('adminInbox')} disabled={!roleAllowed('inbox')}><Bell size={18}/></button><span className="ep-avatar">SA</span></div></header>
    <main className="ep-content">
     <div className="ep-warning"><ShieldCheck size={16}/><span>{t('adminDemoOnly')} {t('adminNoLiveDb')}</span><span className="ep-demo-flag">DEMO</span></div>
-    <div className="ep-heading"><div><span className="ep-eyebrow">AUTOJUBEN / ADMIN OPERATIONS</span><h1>{tab==='overview'?t('adminCommandCenter'):t(labels[tab])}</h1><p>{tab==='overview'?t('adminOverviewDesc'):t('adminTeamDesc')}</p></div><div className="ep-heading-aside"><span className="ep-time"><Clock3 size={15}/> 2026 / 11 / 16</span><span className="ep-role-badge">{t(roleNames[role])}</span></div></div>
+    <div className="ep-heading"><div><span className="ep-eyebrow">AUTOJUBEN / ADMIN OPERATIONS</span><h1>{tab==='overview'?t('adminCommandCenter'):t(labels[tab])}</h1><p>{tab==='overview'?t('adminOverviewDesc'):t('adminTeamDesc')}</p></div><div className="ep-heading-aside"><span className="ep-time"><Clock3 size={15}/> {new Date().toLocaleDateString(locale==='zh'?'zh-CN':locale==='es'?'es-ES':'en-US')}</span><span className="ep-role-badge">{t(roleNames[role])}</span></div></div>
     {tab==='overview'&&<>
-     <div className="ep-kpi-grid">
-      {stat(<UsersRound size={20}/>,'12,480',t('usersCount'),'+8.2%','blue')}
-      {stat(<WalletCards size={20}/>,'$84,290',t('revenue'),'+12.6%','violet')}
-      {stat(<Activity size={20}/>,'98.73%',t('apiSuccess'),'+0.4%','green')}
-      {stat(<MessageSquareText size={20}/>,'27',t('adminPending'),'+3','orange')}
-     </div>
-     <div className="ep-dashboard-grid"><section className="ep-card ep-analytics"><div className="ep-card-head"><div><h2>{t('adminStatistics')}</h2><p>OPERATIONS · SAMPLE METRICS</p></div><span className="ep-range">Last 12 months</span></div><div className="ep-chart"><div className="ep-grid-lines"><span>100%</span><span>75%</span><span>50%</span><span>25%</span></div><div className="ep-chart-bars">{[38,54,48,66,61,74,71,85,67,83,91,96].map((v,i)=><div key={i} className="ep-bar-wrap"><span className="ep-bar" style={{height:String(v)+'%'}}/><small>{['D','J','F','M','A','M','J','J','A','S','O','N'][i]}</small></div>)}</div></div></section>
-      <section className="ep-card"><div className="ep-card-head"><h2>{t('adminRisk')}</h2><span className="ep-tag ep-review">4 flagged</span></div><div className="ep-risk-list">{[{name:'Payment reconciliation',sub:'Transaction mismatch / demo',type:'critical'},{name:'API response latency',sub:'P95 alert / demo',type:'warning'},{name:'Video jobs awaiting review',sub:'8 queued / demo',type:'warning'},{name:'Unassigned support cases',sub:'3 tickets / demo',type:'info'}].map((x,i)=><div className="ep-risk" key={i}><span className={'ep-risk-dot ep-'+x.type}/><div><b>{x.name}</b><small>{x.sub}</small></div>{flag(x.type)}</div>)}</div><button className="ep-text-link" onClick={()=>changeTab('investigations')} disabled={!roleAllowed('investigations')}>{t('adminInvestigateNow')}<ArrowRight size={15}/></button></section>
-     </div>
-     <section className="ep-card"><div className="ep-card-head"><div><h2>{t('recentActivity')}</h2><p>{t('sampleData')} · {t('adminUserActivity')}</p></div><button className="ep-text-link" onClick={()=>changeTab('investigations')} disabled={!roleAllowed('investigations')}>{t('seeAll')}<ArrowRight size={15}/></button></div><div className="ep-table-wrap"><table className="ep-table"><thead><tr><th>{t('created')}</th><th>{t('adminEventType')}</th><th>Event ID</th><th>{t('adminUser')}</th><th>{t('adminStatus')}</th></tr></thead><tbody>{demoEvents.slice(0,7).map(x=><tr key={x.id}><td>{time(x.date,locale)}</td><td>{x.type}</td><td className="ep-mono">{x.id}</td><td>{x.name}</td><td>{flag(x.status)}</td></tr>)}</tbody></table></div></section>
+      <TrendDateFilter dates={overviewDates}/>
+      <p className="ops-overview-note">{t('opsNotLive')}</p>
+      <TrendLineCharts range={overviewDates.range} rows={overviewTrends} source="demo" canRevenue={capabilities[role].includes('ledger')}
+        onOpen={(metric:Metric)=>{const next=metric==='revenue'?'ledger':metric==='online'||metric==='peak'?'users':'investigations';if(roleAllowed(next))changeTab(next);}}/>
+      <section className="ep-card"><div className="ep-card-head"><div><h2>{t('recentActivity')}</h2><p>{t('sampleData')} · {t('adminUserActivity')}</p></div>
+        <button className="ep-text-link" onClick={()=>changeTab('investigations')} disabled={!roleAllowed('investigations')}>{t('seeAll')}<ArrowRight size={15}/></button></div>
+        <div className="ep-table-wrap"><table className="ep-table"><thead><tr><th>{t('created')}</th><th>{t('adminEventType')}</th><th>Event ID</th><th>{t('adminUser')}</th><th>{t('adminStatus')}</th></tr></thead><tbody>
+        {demoEvents.filter(e=>e.date>=overviewDates.range.from&&e.date<overviewDates.range.to).slice(0,7).map(x=><tr key={x.id}><td>{time(x.date,locale)}</td><td>{x.type}</td><td className="ep-mono">{x.id}</td><td>{x.name}</td><td>{flag(x.status)}</td></tr>)}
+        </tbody></table></div></section>
     </>}
     {tab==='staff'&&<section className="ep-card"><div className="ep-card-head"><div><h2>{t('adminStaff')} · RBAC</h2><p>{t('adminTeamDesc')}</p></div><span className="ep-tag ep-active">{staff.length} Staff</span></div><div className="ep-table-wrap"><table className="ep-table"><thead><tr><th>{t('name')}</th><th>{t('email')}</th><th>{t('adminRole')}</th><th>{t('adminCapability')}</th><th>{t('adminStatus')}</th><th>{t('action')}</th></tr></thead><tbody>{staff.map(s=><tr key={s.id}><td><b>{s.name}</b><small>{s.id}</small></td><td>{s.email}</td><td>{t(roleNames[s.role])}</td><td><span className="ep-mono">{capabilities[s.role].join(', ')}</span></td><td>{flag(s.state)}</td><td><button className="ep-plain-btn" disabled={role!=='super_admin'||s.role==='super_admin'} onClick={()=>{setSelectedStaff(s.id);setStaffRole(s.role);}}>{t('details')}</button></td></tr>)}</tbody></table></div>
      {selectedStaff&&role==='super_admin'&&<div className="ep-edit-form"><span>{t('adminSaveRole')} · {selectedStaff}</span><select value={staffRole} onChange={e=>setStaffRole(e.target.value as Role)}>{(Object.keys(roleNames) as Role[]).filter(r=>r!=='super_admin').map(r=><option key={r} value={r}>{t(roleNames[r])}</option>)}</select><button onClick={()=>{setStaff(old=>old.map(s=>s.id===selectedStaff?{...s,role:staffRole}:s));setNotice(t('adminDemoOnly'));setSelectedStaff('');}}>{t('adminSaveRole')}</button><button onClick={()=>setSelectedStaff('')}>{t('backLogin')}</button></div>}
