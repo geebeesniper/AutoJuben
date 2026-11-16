@@ -24,6 +24,6 @@
     "test:contract": "npm run test --workspace @autojuben/api"
   },
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   }
 }
