@@ -159,11 +159,11 @@ export async function adminThreadMessages(threadId:string,limit:number){
  FROM platform_messages m JOIN users u ON u.id=m.sender_id WHERE m.thread_id=$1
  ORDER BY m.id DESC LIMIT $2`,[threadId,limit])).rows.reverse();
 }
-export async function adminCreateThread(subject:string,category:string,priority:string,customerId:string|null,assignedAdminId:string|null,userId:string){
+export async function adminCreateThread(subject:string,category:string,priority:string,customerId:string|null,assignedAdminId:string|null,userId:string,channel:'internal'|'customer'){
  return (await query(`INSERT INTO platform_message_threads
  (subject,channel,category,priority,customer_id,assigned_admin_id,created_by)
- VALUES($1,'internal',$2,$3,NULL,$5,$6) RETURNING id`,
- [subject,category,priority,customerId,assignedAdminId,userId])).rows[0];
+ VALUES($1,$7,$2,$3,$4,$5,$6) RETURNING id`,
+ [subject,category,priority,customerId,assignedAdminId,userId,channel])).rows[0];
 }
 export async function adminPostMessage(threadId:string,actorId:string,content:string){
  const inserted=(await query(`INSERT INTO platform_messages(thread_id,sender_id,content,internal)
