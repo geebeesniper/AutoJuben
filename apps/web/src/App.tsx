@@ -2,6 +2,7 @@ import { useEffect,useState } from 'react';
 import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog } from 'lucide-react';
 import { AuthPage } from './pages/Auth';
 import {DemoPreview} from './pages/DemoPreview';
+import {VideoCreationPreview} from './pages/VideoCreationPreview';
 import {LanguageProvider,LanguageSelect,useI18n} from './i18n';
 import { DashboardPage } from './pages/Dashboard';
 import { Studio } from './pages/Studio';
@@ -111,5 +112,5 @@ export default function App(){
  const path=window.location.pathname;
  const isFrontend=['/preview/frontend','/preview/customer'].includes(path);
  const isBackend=['/preview/backend','/preview/admin'].includes(path);
- return <LanguageProvider>{isFrontend||isBackend?<DemoPreview view={isBackend?'backend':'frontend'}/>:<MainApp/>}</LanguageProvider>;
+ return <LanguageProvider>{isFrontend?<VideoCreationPreview/>:isBackend?<DemoPreview view="backend"/>:<MainApp/>}</LanguageProvider>;
 }
