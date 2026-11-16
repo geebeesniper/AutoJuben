@@ -222,7 +222,7 @@ function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
    setMessages(r.adminMessages);
   }catch(e){onNotify(e instanceof Error?e.message:'消息查询失败');}finally{setBusy(false);}
  }
- useEffect(()=>{void load();},[]);
+ useEffect(()=>{setSelected(null);setMessages([]);void load();},[channel]);
  async function create(){
   if(subject.trim().length<3)return;
   setBusy(true);
