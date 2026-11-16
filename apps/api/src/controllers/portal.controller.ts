@@ -14,6 +14,7 @@ export const portalQueries = {
   billingAvailability: (_root: unknown, args: any, context: Context) => portalServiceQueries.billingAvailability(_root, args, context),
 };
 export const portalMutations = {
+  recordMyPresence: (_root: unknown, args: any, context: Context) => portalServiceMutations.recordMyPresence(_root, args, context),
   openHelpTicket: (_root: unknown, args: any, context: Context) => portalServiceMutations.openHelpTicket(_root, args, context),
   replyHelpTicket: (_root: unknown, args: any, context: Context) => portalServiceMutations.replyHelpTicket(_root, args, context),
   updateMyName: (_root: unknown, args: any, context: Context) => portalServiceMutations.updateMyName(_root, args, context),
