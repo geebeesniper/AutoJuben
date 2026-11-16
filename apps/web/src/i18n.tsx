@@ -1,0 +1,178 @@
+import {createContext,useContext,useEffect,useMemo,useState,type ReactNode} from 'react';
+
+export type Locale='zh'|'en'|'es';
+type Entry=[string,string,string,string];
+const entries:Entry[]=[
+['language','语言','Language','Idioma'],
+['switchLanguage','切换语言','Choose language','Elegir idioma'],
+['demoOnly','演示模式 · 虚拟数据','DEMO MODE · SAMPLE DATA','MODO DEMO · DATOS SIMULADOS'],
+['previewFrontend','客户前台预览','Customer frontend preview','Vista previa del portal de clientes'],
+['previewBackend','管理后台预览','Admin backend preview','Vista previa del panel administrativo'],
+['switchToFrontend','查看客户前台','View customer portal','Ver portal de clientes'],
+['switchToBackend','查看管理后台','View admin console','Ver panel de administración'],
+['openRealLogin','正式登录入口','Real login','Inicio de sesión real'],
+['previewNotice','这是无数据库的演示界面。所有数据均为样例，不会创建账户、发起收费或调用视频 API。','This is a database-free UI preview. All data is simulated; no accounts, payments or video API calls are made.','Esta es una vista previa sin base de datos. Todos los datos son simulados; no se crean cuentas, no se cobran pagos ni se llama a la API de vídeo.'],
+['previewIntro','查看产品结构、响应式界面与核心流程。','Explore the product layout, responsive screens and primary workflows.','Explora la estructura, las pantallas adaptables y los flujos principales.'],
+['overview','总览','Overview','Resumen'],
+['studio','创作工作室','Creative studio','Estudio creativo'],
+['projects','项目管理','Projects','Proyectos'],
+['orders','订单与积分','Orders & credits','Pedidos y créditos'],
+['users','用户管理','Users','Usuarios'],
+['payments','付款与交易','Payments','Pagos'],
+['apiHealth','API 与服务','API & services','API y servicios'],
+['settings','平台设置','Platform settings','Configuración'],
+['nav_overview','概览面板','Dashboard','Panel general'],
+['nav_studio','视频创作台','Video studio','Estudio de vídeo'],
+['nav_projects','我的项目','My projects','Mis proyectos'],
+['nav_jobs','生成任务','Generation jobs','Trabajos de generación'],
+['nav_shop','购买积分','Buy credits','Comprar créditos'],
+['nav_billing','信用卡管理','Payment methods','Métodos de pago'],
+['nav_purchases','购买记录','Purchase history','Historial de compras'],
+['nav_history','历史活动','Activity history','Historial de actividad'],
+['nav_account','我的账户','My account','Mi cuenta'],
+['nav_launcher','运行与部署','Operations & deployments','Operaciones y despliegues'],
+['nav_team','团队成员','Team members','Miembros del equipo'],
+['nav_settings','工作区 API','Workspace API','API del espacio'],
+['nav_adminUsers','用户管理','User management','Gestión de usuarios'],
+['nav_adminOrders','交易记录','Transaction records','Registro de transacciones'],
+['nav_adminPayments','支付网关','Payment gateway','Pasarela de pago'],
+['nav_adminApi','平台 API 设置','Platform API settings','Configuración de API'],
+['workspace','创作工作区','Creative workspace','Espacio creativo'],
+['customerArea','客户账户','Customer account','Cuenta del cliente'],
+['management','工作区管理','Workspace tools','Herramientas de gestión'],
+['platformArea','平台管理','Platform administration','Administración'],
+['currentWorkspace','当前工作区','Current workspace','Espacio actual'],
+['createWorkspace','新增工作区','Create workspace','Crear espacio'],
+['demoEnvironment','演示环境','Demo environment','Entorno demo'],
+['online','在线运行','Online','En línea'],
+['logout','退出登录','Sign out','Cerrar sesión'],
+['refresh','刷新','Refresh','Actualizar'],
+['login','登录','Sign in','Iniciar sesión'],
+['register','注册','Create account','Crear cuenta'],
+['authWelcome','欢迎回来','Welcome back','Te damos la bienvenida'],
+['authCreate','创建你的创作空间','Create your creative workspace','Crea tu espacio creativo'],
+['authForgot','找回密码','Recover password','Recuperar contraseña'],
+['authReset','设置新密码','Set a new password','Establecer nueva contraseña'],
+['authLoginDesc','登录账户，查看创作任务、购买记录和付款方式。','Sign in to manage videos, purchases and payment methods.','Inicia sesión para gestionar vídeos, compras y métodos de pago.'],
+['authCreateDesc','注册账号并建立第一个专属工作区。','Create an account and set up your first workspace.','Crea una cuenta y configura tu primer espacio de trabajo.'],
+['authForgotDesc','输入注册邮箱，我们将发送安全的密码重置邮件。','Enter your email to receive a password-reset link.','Introduce tu correo para recibir un enlace de restablecimiento.'],
+['authResetDesc','验证邮箱链接后，为你的账户设置新密码。','Choose a new password after verifying your email link.','Elige una contraseña nueva después de verificar tu correo.'],
+['authTagline','灵感无限。创作，更简单。','Limitless ideas. Easier creation.','Ideas sin límites. Crea con facilidad.'],
+['authPitch','AI 视频、项目、历史与账单，集中在一个安全的工作台。','Create AI videos and manage projects, history and billing in one secure workspace.','Crea vídeos con IA y gestiona proyectos, historial y pagos en un espacio seguro.'],
+['authSecure','安全客户账户','Secure customer account','Cuenta segura de cliente'],
+['displayName','显示名称','Display name','Nombre público'],
+['workspaceName','工作区名称','Workspace name','Nombre del espacio'],
+['email','邮箱','Email','Correo electrónico'],
+['password','密码','Password','Contraseña'],
+['newPassword','新密码','New password','Nueva contraseña'],
+['forgotPassword','忘记密码？','Forgot password?','¿Olvidaste tu contraseña?'],
+['sendReset','发送重置邮件','Send reset email','Enviar correo de recuperación'],
+['setPassword','设置新密码','Set new password','Establecer contraseña'],
+['loading','加载中…','Loading…','Cargando…'],
+['processing','正在处理…','Processing…','Procesando…'],
+['noAccount','还没有账户？','New here?','¿No tienes cuenta?'],
+['haveAccount','已经有账户？','Already have an account?','¿Ya tienes cuenta?'],
+['backLogin','返回登录','Back to sign in','Volver a iniciar sesión'],
+['joinNow','免费创建工作区','Create free workspace','Crear espacio gratis'],
+['loginNow','立即登录','Sign in now','Iniciar sesión'],
+['authFoot','认证由 Supabase 负责；信用卡由 Stripe 托管。','Authentication uses Supabase; payments are handled by Stripe.','La autenticación usa Supabase; los pagos se gestionan con Stripe.'],
+['welcomeTo','欢迎来到 {name}','Welcome to {name}','Bienvenido a {name}'],
+['welcomeDescription','从灵感到视频，掌控每一段创作过程。','From inspiration to video, manage every step of the process.','De la idea al vídeo, controla cada paso del proceso.'],
+['newVideo','创建视频','Create video','Crear vídeo'],
+['totalJobs','全部视频任务','Total video jobs','Trabajos totales'],
+['activeJobs','进行中','In progress','En progreso'],
+['completedJobs','已完成','Completed','Completados'],
+['totalProjects','工作项目','Projects','Proyectos'],
+['recentJobs','最近任务','Recent jobs','Trabajos recientes'],
+['seeAll','查看全部','View all','Ver todos'],
+['startCreating','开始创作','Start creating','Empezar a crear'],
+['manageProjects','管理项目','Manage projects','Gestionar proyectos'],
+['prompt','视频描述','Video prompt','Descripción del vídeo'],
+['promptPlaceholder','描述场景、风格、动作与镜头运动…','Describe the scene, style, motion and camera angle…','Describe la escena, el estilo, el movimiento y la cámara…'],
+['generateDemo','模拟生成视频','Simulate video creation','Simular creación de vídeo'],
+['demoSubmitted','已创建一条演示任务；未调用真实视频服务。','Demo job created; no real video service was called.','Trabajo de demostración creado; no se llamó al servicio real.'],
+['model','模型','Model','Modelo'],
+['resolution','分辨率','Resolution','Resolución'],
+['duration','时长','Duration','Duración'],
+['seconds','秒','seconds','segundos'],
+['status','状态','Status','Estado'],
+['created','创建时间','Created','Creado'],
+['credits','积分','Credits','Créditos'],
+['balance','可用积分','Available credits','Créditos disponibles'],
+['name','名称','Name','Nombre'],
+['role','角色','Role','Rol'],
+['lastActive','最近活跃','Last activity','Última actividad'],
+['action','操作','Action','Acción'],
+['filter','筛选','Filter','Filtrar'],
+['searchUsers','搜索用户或邮箱','Search users or email','Buscar usuarios o correos'],
+['all','全部','All','Todos'],
+['projectReady','进行中','Active','Activo'],
+['paid','已支付','Paid','Pagado'],
+['pending','待处理','Pending','Pendiente'],
+['failed','失败','Failed','Fallido'],
+['running','运行中','Running','En ejecución'],
+['available','可用','Available','Disponible'],
+['serviceUnavailable','待接入','Not connected','Sin conectar'],
+['demoProjectsDesc','按项目整理场景与生成记录。','Organize scenes and generation history by project.','Organiza escenas e historial por proyecto.'],
+['demoOrdersDesc','示例订单仅用于预览，无真实交易。','These orders are examples only; no real transactions.','Estos pedidos son ejemplos; no hay transacciones reales.'],
+['adminOverviewTitle','平台运营总览','Platform operations overview','Resumen de operaciones'],
+['adminOverviewDesc','监控客户、订单与 API 状态。这里只显示演示数据。','Review customers, orders and API status. Sample data only.','Consulta clientes, pedidos y API. Solo datos simulados.'],
+['usersCount','注册用户','Registered users','Usuarios registrados'],
+['ordersCount','订单数量','Total orders','Pedidos totales'],
+['apiSuccess','API 成功率','API success rate','Tasa de éxito de API'],
+['revenue','测试成交额','Demo transaction volume','Volumen de prueba'],
+['recentActivity','最近活动','Recent activity','Actividad reciente'],
+['systemStatus','系统运行状态','Service status','Estado del sistema'],
+['userDirectory','用户列表','User directory','Directorio de usuarios'],
+['usersDescription','模拟用户资料，不连接真实数据库。','Sample users; no production database access.','Usuarios simulados; sin acceso a la base de datos real.'],
+['ordersDescription','显示模拟支付及订单记录。','Preview sample orders and payments.','Vista de pedidos y pagos simulados.'],
+['apiDescription','查看 GraphQL、REST 和 JSON 接口及模拟监控。','Explore GraphQL, REST and JSON endpoints with sample metrics.','Explora los endpoints GraphQL, REST y JSON con métricas simuladas.'],
+['systemConfiguration','演示平台配置','Demo platform configuration','Configuración de demostración'],
+['settingsDescription','此处配置仅用于界面预览，不会保存到服务器。','Preview-only settings. Nothing is saved to the server.','Configuración de vista previa. No se guarda nada en el servidor.'],
+['notConnected','尚未连接真实服务','Live services not connected','Servicios reales sin conectar'],
+['safePreview','演示界面无法访问真实用户、支付或管理 API。','This demo cannot access real users, payments or administration APIs.','Esta demo no puede acceder a usuarios, pagos ni API de administración reales.'],
+['switchArea','切换预览界面','Switch preview area','Cambiar vista previa'],
+['paymentDisabled','真实收款关闭','Live payments disabled','Pagos reales desactivados'],
+['mockVideo','视频服务模拟模式','Video service in mock mode','Servicio de vídeo en modo simulado'],
+['customerPortal','客户创作平台','Customer creative portal','Portal creativo del cliente'],
+['adminConsole','平台管理控制台','Platform administration console','Panel de administración'],
+['sampleData','样例数据','Sample data','Datos de ejemplo'],
+['createdVideo','视频制作','Video creation','Creación de vídeo'],
+['security','安全与权限','Security & permissions','Seguridad y permisos'],
+['apiRequests','API 请求量','API requests','Solicitudes API'],
+['workspaces','工作区','Workspaces','Espacios de trabajo'],
+['apiStatus','API 状态','API status','Estado de API'],
+['supportNotice','正式功能需连接 Supabase 后启用。','Live features require a configured Supabase project.','Las funciones reales requieren configurar Supabase.'],
+['upgrade','查看方案','Explore plans','Ver planes'],
+['details','详情','Details','Detalles'],
+['overviewHint','示例图表仅用于查看界面布局。','Example metrics are used to preview the layout.','Las métricas de ejemplo sirven para mostrar el diseño.']
+];
+const dictionaries:Record<Locale,Record<string,string>>={zh:{},en:{},es:{}};
+for(const [k,zh,en,es] of entries){dictionaries.zh[k]=zh;dictionaries.en[k]=en;dictionaries.es[k]=es;}
+type TranslationContext={locale:Locale;changeLocale:(locale:Locale)=>void;t:(key:string,values?:Record<string,string|number>)=>string};
+const Context=createContext<TranslationContext|null>(null);
+function startingLocale():Locale{
+ const param=new URLSearchParams(window.location.search).get('lang');
+ if(param==='zh'||param==='en'||param==='es')return param;
+ try{const stored=window.localStorage.getItem('autojuben.locale');if(stored==='zh'||stored==='en'||stored==='es')return stored;}catch{}
+ const nav=window.navigator.language.toLowerCase();
+ return nav.startsWith('es')?'es':nav.startsWith('en')?'en':'zh';
+}
+export function LanguageProvider({children}:{children:ReactNode}){
+ const [locale,changeLocale]=useState<Locale>(startingLocale);
+ useEffect(()=>{document.documentElement.lang=locale==='zh'?'zh-CN':locale==='es'?'es':'en';try{window.localStorage.setItem('autojuben.locale',locale);}catch{}},[locale]);
+ const value=useMemo<TranslationContext>(()=>({locale,changeLocale,t:(key,values)=>{
+  const template=dictionaries[locale][key]??dictionaries.zh[key]??key;
+  return template.replace(/\{([^}]+)\}/g,(_m,k:string)=>String(values?.[k]??''));}}),[locale]);
+ return <Context.Provider value={value}>{children}</Context.Provider>;
+}
+export function useI18n(){const value=useContext(Context);if(!value)throw new Error('LanguageProvider is missing');return value;}
+export function LanguageSelect({compact=false}:{compact?:boolean}){
+ const {locale,changeLocale,t}=useI18n();
+ return <label className={'lang-switch '+(compact?'lang-switch-compact':'')}>
+   <span className="sr-only">{t('switchLanguage')}</span>
+   <select aria-label={t('switchLanguage')} value={locale} onChange={e=>changeLocale(e.target.value as Locale)}>
+     <option value="zh">中文</option><option value="en">English</option><option value="es">Español</option>
+   </select>
+ </label>;
+}
