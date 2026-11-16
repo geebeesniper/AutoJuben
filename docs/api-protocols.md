@@ -89,6 +89,21 @@ The AutoJuben public APIs remain fixed for backward compatibility: `POST /graphq
 - Verify polling and fallback video-link route behavior; no blind retries on failed/unknown submissions; settle/refund credit reservations correctly.
 - Check HTTPS validation, rejection of host/query/path traversal attempts, error messages and audit logs. No real provider requests while `MOCK_VIDEO_PROVIDER=true`.
 
+## Help Center and Help Desk: two separate messaging channels
+
+**Knowledge base** is read-only for customers and published from PostgreSQL `help_articles` (six categories: `getting_started`, `generation`, `billing`, `account`, `api`, `troubleshooting`). The server selects a fixed `zh/en/es` translation column and searches only `published=true`. `helpArticles(category,search,locale,limit)` is the categorized FAQ query; no raw SQL or unpublished drafts are exposed.
+
+**Customer Help Desk** uses `platform_message_threads.channel='customer'`, with exactly one `customer_id` and a required issue category `general|generation|technical|billing|account`. These authenticated GraphQL operations live in the **existing Portal controller/service/repository**:
+
+- `myHelpThreads(category,status,limit)`: list **only** the current session user's support tickets.
+- `myHelpMessages(threadId,limit)`: require ownership AND `channel='customer'`; return only messages with `internal=false`, never team notes.
+- `openHelpTicket(category,subject,content)`: validate category and lengths; atomically create customer ticket + first message. Database is the persistent source of truth, not a file or localStorage.
+- `replyHelpTicket(threadId,content)`: require the logged-in customer to own the open ticket; reject closed threads and foreign IDs.
+
+**Admin Team Messenger** uses `channel='internal'`, cannot have `customer_id`, and has only internal administrator messages. Admin Inbox has distinct `channel='internal'|'customer'` selections. The platform-admin `adminInbox(channel,...)`, `adminMessages`, `adminCreateThread(channel,...)`, `adminSendMessage`, and `adminUpdateThread` stay protected by `messaging` capabilities; internal/customer category and ownership constraints are enforced by the Service and SQL 008. Admin responses on a customer ticket are stored as `internal=false`; customer-support traffic is never routed into the internal team channel.
+
+**Security and release checks:** verify customer A cannot query, reply to or enumerate customer B's ticket; customer cannot access a staff-only conversation; a staff-only internal message is never returned even if manually inserted into a customer thread; anonymous users cannot submit tickets; disabled accounts cannot use old sessions; non-messaging staff cannot access admin threads. Run cases with two real users and separate admin roles on staging after running the unapplied `sql/008_enterprise_admin.sql`. The three public AutoJuben API transports remain backward-compatible; these new support operations are **session-authenticated GraphQL** and must not be added to the workspace API-key REST/JSON allowlist without independent contract review.
+
 ## Security contract
 
 - Workspaces are isolated by `orgId` and existing `requireMembership` checks in Services. Do not use global user identifiers to bypass org membership.
