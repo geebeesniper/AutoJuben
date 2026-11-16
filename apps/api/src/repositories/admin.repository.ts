@@ -79,7 +79,7 @@ export async function adminOverviewRows(input:{
  const bucket=(column:string)=>input.unit==='hour'
   ?"to_char(date_trunc('hour', "+column+" AT TIME ZONE 'UTC'), 'YYYY-MM-DD\"T\"HH24:00:00\"Z\"')"
   :"to_char("+column+" AT TIME ZONE $3, 'YYYY-MM-DD')";
- const p=[input.from,input.to,input.timezone];
+ const p=input.unit==='hour'?[input.from,input.to]:[input.from,input.to,input.timezone];
  const revenueSql='SELECT '+bucket('o.paid_at')+' AS key, SUM(GREATEST(o.amount_cents-o.refunded_amount_cents,0))::bigint AS value '
   +"FROM purchase_orders o WHERE o.paid_at >= $1::timestamptz AND o.paid_at < $2::timestamptz "
   +"AND o.status IN ('paid','partially_refunded','refunded') GROUP BY 1 ORDER BY 1";
