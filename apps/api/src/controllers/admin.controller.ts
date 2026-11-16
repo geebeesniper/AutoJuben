@@ -3,6 +3,7 @@ import { adminServiceQueries, adminServiceMutations } from '../services/admin.se
 /** GraphQL adapters: no SQL, side effects, or business rules here. */
 export const adminQueries = {
   adminMyRole: (_root: unknown, args: any, context: Context) => adminServiceQueries.adminMyRole(_root, args, context),
+  adminOverview: (_root: unknown, args: any, context: Context) => adminServiceQueries.adminOverview(_root, args, context),
   adminStaff: (_root: unknown, args: any, context: Context) => adminServiceQueries.adminStaff(_root, args, context),
   adminLedger: (_root: unknown, args: any, context: Context) => adminServiceQueries.adminLedger(_root, args, context),
   adminInvestigations: (_root: unknown, args: any, context: Context) => adminServiceQueries.adminInvestigations(_root, args, context),
