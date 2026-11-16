@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
 jobs:
-  verify-and-import:
+  stage-and-verify:
     if: github.repository == 'geebeesniper/AutoJuben'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -36,13 +36,22 @@ jobs:
               assert '..' not in path.parts and not member.filename.startswith('/')
               rel=pathlib.Path(*path.parts[1:])
               assert rel.name not in ('.env', '.env.local', '.env.production')
-              # Retain the hardened CI workflow already committed in GitHub.
+              # Retain the reviewed CI workflow in GitHub.
               if rel.as_posix()=='.github/workflows/quality.yml': continue
               dest=root/rel
               dest.parent.mkdir(parents=True,exist_ok=True)
               dest.write_bytes(z.read(member))
           print('Verified and extracted',len(members),'archive entries')
           PY
+      - name: Commit extracted source to isolated candidate branch
+        shell: bash
+        run: |
+          git switch -c candidate/v0.6.0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: import verified AutoJuben MVC API SaaS v0.6.0'
+          git push -u origin candidate/v0.6.0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -58,11 +67,5 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build:web
-      - name: Commit verified source
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git diff --cached --quiet || git commit -m 'feat: import verified AutoJuben MVC API SaaS v0.6.0'
-          git push origin HEAD:main
+      - name: Report safe merge candidate
+        run: echo 'Quality checks passed. Review candidate/v0.6.0 and create a PR; do not auto-merge into main.'
