@@ -1,5 +1,11 @@
 import { query } from '../db/pool.js';
 /** Query-only data access. Caller must authorize the workspace and user first. */
+/** Single owner of logged-in customer presence recording, deduplicated every 5 min. */
+export async function recordPresenceSample(userId:string){
+ await query("INSERT INTO platform_presence_samples(user_id,sample_at) "
+  +"VALUES($1,date_bin('5 minutes',now(),'2000-01-01 00:00:00+00'::timestamptz)) "
+  +"ON CONFLICT(user_id,sample_at) DO NOTHING",[userId]);
+}
 export async function accountActivity(userId:string,orgId:string,limit:number){
   return (await query<{id:string;action:string;detail:unknown;created_at:Date}>(`SELECT id::text,action,detail,created_at FROM audit_logs
     WHERE org_id=$1 AND actor_id=$2 ORDER BY created_at DESC LIMIT $3`,[orgId,userId,limit])).rows;
