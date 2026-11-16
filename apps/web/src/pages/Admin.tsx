@@ -97,8 +97,45 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
  return <><Head tag="ADMIN / API INTEGRATIONS" title="API 集成中心" body="管理 151 视频 API 默认密钥，查看当前上游环境。工作区可单独覆盖自己的 X-License-Key。"/><div className="portal-two-columns"><section className="panel portal-card"><div className="portal-card-heading"><CloudCog size={22}/><h2>视频 API 配置</h2></div><div className="portal-info-row"><span>上游 API Endpoint</span><code>{info?.baseUrl??'加载中…'}</code></div><div className="portal-info-row"><span>运行模式</span><b>{info?.mock?'MOCK / DEMO':'LIVE PROVIDER'}</b></div><div className="portal-info-row"><span>全局默认卡密</span><b>{info?.globalKeyConfigured?'已配置':'未配置'}</b></div>{info?.baseUrl.startsWith('http://')&&!info.mock&&<div className="notice danger inline"><ShieldAlert size={17}/>上游仍为 HTTP，不适合传输真实密钥。建议服务商配置 HTTPS。</div>}<div className="portal-divider"/><label className="field"><span>默认 X-License-Key</span><div className="portal-input-suffix"><input type={show?'text':'password'} value={key} onChange={e=>setKey(e.target.value)} placeholder="输入新卡密；空值保存可清除数据库覆盖"/><button onClick={()=>setShow(x=>!x)} className="icon-btn">{show?'隐藏':'显示'}</button></div></label><div className="portal-btn-row"><button className="btn btn-primary" disabled={busy} onClick={()=>void save()}><Save size={15}/>保存 API 密钥</button></div></section>
  <section className="panel portal-card"><div className="portal-card-heading"><ShieldCheck size={22}/><h2>连接与安全设置</h2></div><div className="portal-step"><span>01</span><div><b>Vercel 环境变量</b><p>通过 VIDEO_API_BASE_URL 修改上游 API 地址；配置 MOCK_VIDEO_PROVIDER=false 才真正发送任务。</p></div></div><div className="portal-step"><span>02</span><div><b>统一密钥优先级</b><p>工作区专属密钥 → 管理员默认密钥 → Vercel VIDEO_API_LICENSE_KEY。</p></div></div><div className="portal-step"><span>03</span><div><b>API 使用和状态</b><p>工作区的「平台设置」页面可读取 /api/pricing 与 /api/public-settings，不显示真实密钥。</p></div></div><div className="portal-btn-row"><button className="btn btn-ghost" onClick={()=>void load()}><RefreshCw size={16}/>刷新状态</button><button className="btn btn-primary" disabled={busy} onClick={()=>void test()}><Activity size={16}/>测试 API 连接</button></div></section></div></>;
 }
+
+function StaffPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
+ const {t}=useI18n();
+ const [items,setItems]=useState<StaffMember[]>([]),[roleInfo,setRoleInfo]=useState<RoleInfo|null>(null);
+ const [userId,setUserId]=useState(''),[role,setRole]=useState('analyst'),[active,setActive]=useState(true),[busy,setBusy]=useState(false);
+ async function load(){
+  setBusy(true);
+  try{const r=await gql<{adminStaff:StaffMember[];adminMyRole:RoleInfo}>('query{adminStaff{userId name email role active updatedAt} adminMyRole{role capabilities}}');
+   setItems(r.adminStaff);setRoleInfo(r.adminMyRole);
+  }catch(e){onNotify(e instanceof Error?e.message:'管理员团队读取失败');}
+  finally{setBusy(false);}
+ }
+ useEffect(()=>{void load();},[]);
+ async function save(){
+  setBusy(true);
+  try{await gql('mutation($userId:ID!,$role:String!,$active:Boolean!){adminSetStaffRole(userId:$userId,role:$role,active:$active)}',{userId,role,active});
+   onNotify('管理员权限已保存并记录审计',true);setUserId('');await load();
+  }catch(e){onNotify(e instanceof Error?e.message:'权限保存失败');}finally{setBusy(false);}
+ }
+ return <><Head tag="GOVERNANCE / RBAC" title={t('adminStaff')} body={t('adminTeamDesc')}/>
+ <section className="panel portal-card">
+  <div className="portal-card-heading"><ShieldUser size={20}/><h2>{t('adminRole')} · {roleInfo?.role??'—'}</h2><button className="btn btn-ghost" disabled={busy} onClick={()=>void load()}><RefreshCw size={15}/>{t('adminRefresh')}</button></div>
+  <div className="admin-role-summary">{roles.map(([id,label])=><span key={id}>{t(label)} · {id}</span>)}</div>
+  <div className="portal-scroll"><table className="portal-table"><thead><tr><th>{t('name')}</th><th>Email</th><th>{t('adminRole')}</th><th>{t('status')}</th><th>{t('lastActive')}</th><th>{t('action')}</th></tr></thead>
+   <tbody>{items.map(item=><tr key={item.userId}><td>{item.name}<small className="portal-mono">{item.userId}</small></td><td>{item.email}</td><td><b>{t(roles.find(r=>r[0]===item.role)?.[1]??item.role)}</b></td><td><span className={'portal-status '+(item.active?'paid':'failed')}>{item.active?t('adminActive'):t('adminInactive')}</span></td><td>{formatDate(item.updatedAt)}</td><td><button className="btn btn-ghost" onClick={()=>{setUserId(item.userId);setRole(item.role);setActive(item.active);}}>{t('details')}</button></td></tr>)}</tbody>
+  </table></div>
+ </section>
+ <section className="panel portal-card admin-detail-panel"><h2>{t('adminSaveRole')}</h2>
+  <p className="portal-help">管理员必须先注册，再通过用户 UUID 分配权限。超级管理员只从服务器环境变量指定。</p>
+  <div className="admin-filter-bar"><label>User UUID<input value={userId} onChange={e=>setUserId(e.target.value)} placeholder="Registered user UUID"/></label>
+  <label>{t('adminRole')}<select value={role} onChange={e=>setRole(e.target.value)}>{roles.filter(([id])=>roleInfo?.role==='super_admin'||['support_lead','analyst','auditor'].includes(id)).map(([id,label])=><option key={id} value={id}>{t(label)}</option>)}</select></label>
+  <label>{t('adminActive')}<select value={active?'yes':'no'} onChange={e=>setActive(e.target.value==='yes')}><option value="yes">{t('adminActive')}</option><option value="no">{t('adminInactive')}</option></select></label>
+  <button className="btn btn-primary" disabled={busy||!/^[\da-f-]{36}$/i.test(userId)} onClick={()=>void save()}><Save size={15}/>{t('adminSaveRole')}</button></div>
+ </section></>;
+}
+
 export function AdminPage({section,user,onNotify}:{section:Area;user:User;onNotify:(m:string,ok?:boolean)=>void}){
  if(section==='adminUsers')return <AdminUsers current={user} onNotify={onNotify}/>;
+ if(section==='adminStaff')return <StaffPage onNotify={onNotify}/>;
  if(section==='adminOrders')return <AdminOrders onNotify={onNotify}/>;
  if(section==='adminPayments')return <GatewayPage onNotify={onNotify}/>;
  return <><ApiPage onNotify={onNotify}/><ApiMetricsPanel/></>;
