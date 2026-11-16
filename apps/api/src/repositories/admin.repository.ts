@@ -78,7 +78,7 @@ export async function adminLedgerRows(args:{orgId:string;sourceType:string;searc
  FROM credit_ledger l JOIN organizations o ON o.id=l.org_id
  WHERE ($1='' OR l.org_id::text=$1)
  AND ($2='' OR l.source_type=$2)
- AND ($3='' OR l.source_id ILIKE $3 ESCAPE '\\')
+ AND ($3='' OR l.source_id ILIKE $3)
  AND ($4::timestamptz IS NULL OR l.created_at >= $4::timestamptz)
  AND ($5::timestamptz IS NULL OR l.created_at < $5::timestamptz)
  AND ($6::bigint IS NULL OR l.id < $6::bigint)
@@ -130,12 +130,14 @@ export async function adminInvestigationRows(args:{orgId:string;eventType:string
  FROM events e
  LEFT JOIN organizations o ON o.id=e."orgId"
  LEFT JOIN users u ON u.id=e."userId"
- WHERE ($3='' OR e."eventId" ILIKE $3 ESCAPE '\\' OR e.summary ILIKE $3 ESCAPE '\\'
- OR u.email ILIKE $3 ESCAPE '\\')
- AND ($7::timestamptz IS NULL OR e."createdAt" < $7::timestamptz)
- ORDER BY e."createdAt" DESC,e."eventType" ASC,e."eventId" DESC LIMIT $8
+ WHERE ($3='' OR e."eventId" ILIKE $3 OR e.summary ILIKE $3
+ OR u.email ILIKE $3)
+ AND ($7::timestamptz IS NULL OR
+  (e."createdAt",e."eventType",e."eventId") < ($7::timestamptz,$8::text,$9::text))
+ ORDER BY e."createdAt" DESC,e."eventType" DESC,e."eventId" DESC LIMIT $10
  `,[args.orgId,args.eventType,args.search?`%${escapeLike(args.search)}%`:'',
- args.userId||null,args.from,args.to,args.before,args.limit])).rows;
+ args.userId||null,args.from,args.to,args.before?args.before.split('|')[0]:null,
+ args.before?args.before.split('|')[1]:null,args.before?args.before.split('|')[2]:null,args.limit])).rows;
 }
 export async function adminThreads(args:{search:string;status:string;category:string;limit:number}){
  return (await query(`SELECT t.id,t.subject,t.category,t.status,t.priority,
@@ -144,7 +146,7 @@ export async function adminThreads(args:{search:string;status:string;category:st
  (SELECT count(*)::int FROM platform_messages m WHERE m.thread_id=t.id) AS "messageCount"
  FROM platform_message_threads t
  LEFT JOIN users u ON u.id=t.customer_id LEFT JOIN users s ON s.id=t.assigned_admin_id
- WHERE ($1='' OR t.subject ILIKE $1 ESCAPE '\\' OR u.email ILIKE $1 ESCAPE '\\')
+ WHERE ($1='' OR t.subject ILIKE $1 OR u.email ILIKE $1)
  AND ($2='' OR t.status=$2) AND ($3='' OR t.category=$3)
  ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,t.updated_at DESC
  LIMIT $4`,[args.search?`%${escapeLike(args.search)}%`:'',args.status,args.category,args.limit])).rows;
