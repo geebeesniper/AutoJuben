@@ -110,6 +110,7 @@
 .admin-details-grid>div{background:#f7f9fd;border-radius:10px;padding:15px;min-width:0}
 .admin-details-grid small{display:block;color:#8b9bb1;font-size:10px;margin-bottom:8px}
 .admin-details-grid b{display:block;color:#38506f;font-size:12px;overflow-wrap:anywhere}
+.admin-messenger-channels{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:21px;border-bottom:1px solid #e5eaf3;padding-bottom:15px}.admin-messenger-channels button{background:#f7f9fc;border:1px solid #e1e8f3;border-radius:9px;padding:12px 18px;color:#52658a;font-size:12px;font-weight:800;cursor:pointer}.admin-messenger-channels button.selected{background:#eaf0ff;color:#4b65c7;border-color:#b9c9fb}
 .admin-messenger-layout{display:grid;grid-template-columns:minmax(220px,.78fr) minmax(310px,1.22fr);gap:0;min-height:480px;border:1px solid #e5ecf6;border-radius:13px;overflow:hidden;background:#fff}
 .admin-thread-list{background:#f7f9fd;overflow:auto;max-height:650px;border-right:1px solid #e4ebf4;padding:9px}
 .admin-thread{display:flex;align-items:stretch;flex-direction:column;text-align:left;gap:6px;width:100%;background:transparent;border:1px solid transparent;border-radius:9px;padding:13px;cursor:pointer;color:#607493}
