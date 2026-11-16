@@ -1,10 +1,10 @@
 import {useEffect,useRef,useState,type ChangeEvent} from 'react';
-import {ArrowLeft,ArrowRight,Check,ChevronDown,Clapperboard,Clock3,Compass,Film,FolderOpen,Grid2X2,Image as ImageIcon,Images,Info,Layers3,Menu,PanelLeftClose,Play,Plus,Settings2,ShieldCheck,Sparkles,UploadCloud,Video,WandSparkles,X} from 'lucide-react';
+import {ArrowLeft,ArrowRight,Check,ChevronDown,Clapperboard,Clock3,Compass,Film,FolderOpen,BookOpenCheck,LifeBuoy,MessageSquareText,Search,Send,Grid2X2,Image as ImageIcon,Images,Info,Layers3,Menu,PanelLeftClose,Play,Plus,Settings2,ShieldCheck,Sparkles,UploadCloud,Video,WandSparkles,X} from 'lucide-react';
 import {LanguageSelect,useI18n,type Locale} from '../i18n';
 import './video-creation-preview.css';
 
 type Mode='image'|'text'|'story';
-type Pane='create'|'explore'|'library';
+type Pane='create'|'explore'|'library'|'helpCenter'|'helpDesk';
 type Asset={id:number;url:string;name:string};
 type Localized={zh:string;en:string;es:string};
 type Scene={id:string;title:Localized;image:string;description:Localized;color:string;tag:string};
@@ -67,11 +67,26 @@ const strings={
 } as const;
 
 type TranslationKey=keyof typeof strings.zh;
+type FaqSample={id:string;category:string;title:Localized;answer:Localized};
+type TicketDemo={id:string;category:string;subject:string;status:'open'|'pending'|'resolved';messages:{by:'customer'|'support';text:string;time:string}[]};
+const faqSamples:FaqSample[]=[
+ {id:'intro',category:'getting_started',title:{zh:'如何开始制作视频？',en:'How do I create a video?',es:'¿Cómo creo un vídeo?'},answer:{zh:'在 Studio 输入提示词、选模型并添加参考图片。正式生成需先连接视频 API。',en:'In Studio, enter a prompt, select a model and add reference images. Live generation requires a configured provider.',es:'En Studio, escribe una descripción, elige un modelo y añade referencias. La generación real requiere conectar un proveedor.'}},
+ {id:'images',category:'generation',title:{zh:'支持几张参考图片？',en:'How many reference images can I add?',es:'¿Cuántas imágenes puedo subir?'},answer:{zh:'最多九张参考图片，可调整排列顺序。',en:'Up to nine reference images, in your chosen order.',es:'Hasta nueve imágenes de referencia en el orden que elijas.'}},
+ {id:'waiting',category:'troubleshooting',title:{zh:'视频一直在生成怎么办？',en:'Why is my video job taking so long?',es:'¿Por qué tarda tanto mi vídeo?'},answer:{zh:'查看任务状态和错误信息。如果不确定是否已提交，不要重复创建同一个任务，可以联系 Help Desk。',en:'Check task status and errors. Do not resubmit an uncertain task; contact Help Desk with the task ID.',es:'Comprueba el estado y los errores. No reenvíes una tarea incierta; contacta con soporte.'}},
+ {id:'credits',category:'billing',title:{zh:'积分和充值在哪里查看？',en:'Where can I see credits and orders?',es:'¿Dónde veo créditos y compras?'},answer:{zh:'在购买记录查看订单。AutoJuben 工作区积分与上游 API 积分分别计算。',en:'See Purchase History. Workspace credits and upstream video API credits are tracked separately.',es:'Consulta el historial de compras. Los créditos de AutoJuben y del proveedor son diferentes.'}},
+ {id:'account',category:'account',title:{zh:'登录有问题怎么办？',en:'What if I cannot sign in?',es:'¿Qué hago si no puedo iniciar sesión?'},answer:{zh:'使用找回密码流程，或在 Help Desk 选择账户类别。不要向客服发送密码。',en:'Use password recovery or select Account in Help Desk. Never send your password.',es:'Recupera tu contraseña o elige Cuenta en soporte. Nunca compartas tu contraseña.'}},
+ {id:'api',category:'api',title:{zh:'在哪里配置 API？',en:'Where do I configure APIs?',es:'¿Dónde configuro las API?'},answer:{zh:'工作区管理员可在 Settings 查看 GraphQL、REST、JSON 接口以及上游视频接口设置。',en:'Workspace admins can view GraphQL, REST, JSON and video provider settings in Settings.',es:'Los administradores pueden ver GraphQL, REST, JSON y las rutas del proveedor en Ajustes.'}}
+];
+const knowledgeCategories=['getting_started','generation','billing','account','api','troubleshooting'];
+const supportCategories=['general','generation','technical','billing','account'];
+const supportLabels:Record<string,string>={getting_started:'helpGettingStarted',generation:'helpGeneration',billing:'helpBilling',account:'helpAccount',api:'helpApi',troubleshooting:'helpTroubleshooting',general:'helpGeneral',technical:'helpTechnical'};
 const identity=(locale:Locale,copy:Localized)=>copy[locale];
 export function VideoCreationPreview(){
- const {locale}=useI18n();
+ const {locale,t:appT}=useI18n();
  const t=(key:TranslationKey):string=>strings[locale][key];
  const [pane,setPane]=useState<Pane>('create');
+ const [faqCategory,setFaqCategory]=useState(''),[helpSearch,setHelpSearch]=useState(''),[openFaq,setOpenFaq]=useState('');
+ const [tickets,setTickets]=useState<TicketDemo[]>([]),[ticketId,setTicketId]=useState(''),[ticketCategory,setTicketCategory]=useState('general'),[ticketSubject,setTicketSubject]=useState(''),[ticketBody,setTicketBody]=useState(''),[ticketReply,setTicketReply]=useState(''),[ticketNew,setTicketNew]=useState(false);
  const [mode,setMode]=useState<Mode>('image');
  const [ratio,setRatio]=useState('16:9');
  const [duration,setDuration]=useState(8);
@@ -85,6 +100,9 @@ export function VideoCreationPreview(){
  const [notice,setNotice]=useState('');
  const uploadRef=useRef<HTMLInputElement>(null);
  const urlsRef=useRef<string[]>([]);
+ const helpCategoryName=(value:string)=>appT(supportLabels[value]??value);
+ const chosenTicket=tickets.find(x=>x.id===ticketId);
+ const visibleFaq=faqSamples.filter(x=>(!faqCategory||x.category===faqCategory)&&(!helpSearch||((identity(locale,x.title)+' '+identity(locale,x.answer)).toLowerCase().includes(helpSearch.toLowerCase()))));
  const scene=scenes.find(s=>s.id===current)??scenes[0];
  const title=identity(locale,scene.title);
  const image=activeUpload===null?scene.image:uploads.find(a=>a.id===activeUpload)?.url??scene.image;
@@ -111,6 +129,9 @@ export function VideoCreationPreview(){
      <button aria-label={t('newCreation')} title={t('newCreation')} className={pane==='create'?'vc-rail-active':''} onClick={()=>{setPane('create');setPanelOpen(false);}}><Plus size={22}/></button>
      <button aria-label={t('explore')} title={t('explore')} className={pane==='explore'?'vc-rail-active':''} onClick={()=>{setPane('explore');setPanelOpen(false);}}><Compass size={21}/></button>
      <button aria-label={t('library')} title={t('library')} className={pane==='library'?'vc-rail-active':''} onClick={()=>{setPane('library');setPanelOpen(false);}}><FolderOpen size={21}/></button>
+     <div className="vc-rail-divider"/>
+     <button aria-label={appT('nav_helpCenter')} title={appT('nav_helpCenter')} className={pane==='helpCenter'?'vc-rail-active':''} onClick={()=>{setPane('helpCenter');setPanelOpen(false);}}><BookOpenCheck size={21}/></button>
+     <button aria-label={appT('nav_helpDesk')} title={appT('nav_helpDesk')} className={pane==='helpDesk'?'vc-rail-active':''} onClick={()=>{setPane('helpDesk');setPanelOpen(false);}}><LifeBuoy size={21}/></button>
      <div className="vc-rail-bottom"><a href="/preview/backend" title={t('admin')} aria-label={t('admin')}><Settings2 size={21}/></a><a href="/" title={t('login')} aria-label={t('login')}><ArrowRight size={21}/></a></div>
    </nav>
    {pane==='create'&&<aside className={'vc-controls '+(panelOpen?'vc-controls-open':'')}>
@@ -140,7 +161,7 @@ export function VideoCreationPreview(){
    </aside>}
    {panelOpen&&pane==='create'&&<button className="vc-mobile-backdrop" onClick={()=>setPanelOpen(false)} aria-label={t('hidePanel')}/>}
    <main className="vc-workspace">
-     <header className="vc-topbar"><div className="vc-top-left">{pane==='create'&&<button className="vc-mobile-toggle" onClick={()=>setPanelOpen(true)} title={t('showPanel')}><Menu size={21}/></button>}<span className="vc-breadcrumb">{t('work')}</span><ChevronDown size={13}/><strong>{pane==='create'?t('newCreation'):pane==='explore'?t('explore'):t('library')}</strong></div><div className="vc-top-right"><span className="vc-preview-pill"><span/>{t('status')}</span><LanguageSelect compact/><a href="/preview/backend" className="vc-admin-link">{t('admin')}<ArrowRight size={14}/></a></div></header>
+     <header className="vc-topbar"><div className="vc-top-left">{pane==='create'&&<button className="vc-mobile-toggle" onClick={()=>setPanelOpen(true)} title={t('showPanel')}><Menu size={21}/></button>}<span className="vc-breadcrumb">{t('work')}</span><ChevronDown size={13}/><strong>{pane==='create'?t('newCreation'):pane==='explore'?t('explore'):pane==='library'?t('library'):pane==='helpCenter'?appT('nav_helpCenter'):appT('nav_helpDesk')}</strong></div><div className="vc-top-right"><span className="vc-preview-pill"><span/>{t('status')}</span><LanguageSelect compact/><a href="/preview/backend" className="vc-admin-link">{t('admin')}<ArrowRight size={14}/></a></div></header>
      <div className="vc-canvas-scroll">
        <div className="vc-heading"><span className="vc-eyebrow"><Sparkles size={14}/> AUTOJUBEN / CREATIVE STUDIO</span><h1>{t('title')}</h1><p>{t('subtitle')}</p></div>
        {pane==='create'&&<div className="vc-work-grid">
@@ -162,6 +183,19 @@ export function VideoCreationPreview(){
        </div>}
        {pane==='explore'&&<section className="vc-explore-page"><div className="vc-section-head"><div><span className="vc-eyebrow">INSPIRATION / SAMPLE FRAMES</span><h2>{t('gallery')}</h2><p>{t('gallerySub')}</p></div></div><div className="vc-discover-grid">{scenes.map(s=><button key={s.id} className="vc-discover-tile" onClick={()=>selectScene(s)}><img src={s.image} loading="lazy" alt={identity(locale,s.title)}/><span className="vc-tile-overlay"/><span className="vc-tile-tag">{s.tag}</span><span className="vc-discover-caption"><strong>{identity(locale,s.title)}</strong><small>{t('choose')} <ArrowRight size={14}/></small></span></button>)}</div></section>}
        {pane==='library'&&<section className="vc-library-page"><div className="vc-section-head"><div><span className="vc-eyebrow">ASSETS / LOCAL ONLY</span><h2>{t('library')}</h2><p>{t('assetNotice')}</p></div><button onClick={()=>{setPane('create');setPanelOpen(true);}}><Plus size={15}/>{t('add')}</button></div>{uploads.length>0?<div className="vc-discover-grid">{uploads.map(a=><button className="vc-discover-tile" key={a.id} onClick={()=>{setActiveUpload(a.id);setPane('create');}}><img src={a.url} alt={a.name}/><span className="vc-tile-overlay"/><span className="vc-discover-caption"><strong>{a.name}</strong><small>{t('choose')} <ArrowRight size={14}/></small></span></button>)}</div>:<div className="vc-empty-library"><div className="vc-empty-icon"><Images size={42}/></div><h2>{t('noAssets')}</h2><p>{t('noAssetsDesc')}</p><button onClick={()=>{setPane('create');setPanelOpen(true);}}><Plus size={17}/>{t('upload')}</button></div>}</section>}
+       {pane==='helpCenter'&&<section className="vc-help-page">
+         <div className="vc-section-head"><div><span className="vc-eyebrow">HELP CENTER / KNOWLEDGE</span><h2>{appT('helpCenterTitle')}</h2><p>{appT('helpCenterIntro')}</p></div><button onClick={()=>setPane('helpDesk')}><LifeBuoy size={15}/>{appT('nav_helpDesk')}</button></div>
+         <div className="vc-help-card"><div className="vc-help-search"><Search size={18}/><input value={helpSearch} onChange={e=>setHelpSearch(e.target.value)} placeholder={appT('helpSearch')} aria-label={appT('helpSearch')}/></div>
+         <div className="vc-help-categories"><button className={!faqCategory?'active':''} onClick={()=>setFaqCategory('')}>{appT('helpAllCategories')}</button>{knowledgeCategories.map(cat=><button key={cat} className={faqCategory===cat?'active':''} onClick={()=>setFaqCategory(cat)}>{helpCategoryName(cat)}</button>)}</div>
+         <div className="vc-help-articles">{visibleFaq.map(x=><article key={x.id}><button aria-expanded={openFaq===x.id} onClick={()=>setOpenFaq(openFaq===x.id?'':x.id)}><span><small>{helpCategoryName(x.category)}</small><b>{identity(locale,x.title)}</b></span><Plus size={17}/></button>{openFaq===x.id&&<p>{identity(locale,x.answer)}</p>}</article>)}{!visibleFaq.length&&<p>{appT('helpNoArticles')}</p>}</div>
+         <div className="vc-help-foot"><ShieldCheck size={14}/>{appT('helpPreviewOnly')}</div></div></section>}
+       {pane==='helpDesk'&&<section className="vc-help-page">
+         <div className="vc-section-head"><div><span className="vc-eyebrow">HELP DESK / CONTACT</span><h2>{appT('helpDeskTitle')}</h2><p>{appT('helpDeskIntro')}</p></div><button onClick={()=>setTicketNew(v=>!v)}><Plus size={16}/>{appT('helpCreateTicket')}</button></div>
+         <div className="vc-help-card"><div className="vc-help-banner"><LifeBuoy size={19}/>{appT('helpPreviewOnly')}</div>
+         {ticketNew&&<div className="vc-ticket-form"><label>{appT('helpCategory')}<select value={ticketCategory} onChange={e=>setTicketCategory(e.target.value)}>{supportCategories.map(cat=><option value={cat} key={cat}>{helpCategoryName(cat)}</option>)}</select></label><label>{appT('helpSubject')}<input value={ticketSubject} maxLength={200} onChange={e=>setTicketSubject(e.target.value)}/></label><label className="wide">{appT('helpDescription')}<textarea rows={4} maxLength={8000} value={ticketBody} onChange={e=>setTicketBody(e.target.value)}/></label><button disabled={ticketSubject.trim().length<3||ticketBody.trim().length<5} onClick={()=>{const id='DEMO-'+String(tickets.length+1).padStart(4,'0');const item:TicketDemo={id,subject:ticketSubject.trim(),category:ticketCategory,status:'open',messages:[{by:'customer',text:ticketBody.trim(),time:new Date().toLocaleString()}]};setTickets(old=>[item,...old]);setTicketId(id);setTicketSubject('');setTicketBody('');setTicketNew(false);}}><Send size={15}/>{appT('helpSubmit')}</button></div>}
+         <div className="vc-support-layout"><aside>{tickets.map(item=><button key={item.id} className={item.id===ticketId?'selected':''} onClick={()=>setTicketId(item.id)}><b>{item.subject}</b><span>{helpCategoryName(item.category)} · {item.status}</span><small>{item.id}</small></button>)}{!tickets.length&&<p>{appT('helpNoTickets')}</p>}</aside>
+         <div className="vc-support-chat">{chosenTicket?<><header><b>{chosenTicket.subject}</b><span>{chosenTicket.status}</span></header><div className="vc-support-messages">{chosenTicket.messages.map((m,i)=><article key={i}><b>{m.by==='customer'?appT('nav_helpDesk'):'Support'}</b><p>{m.text}</p><small>{m.time}</small></article>)}</div><div className="vc-support-compose"><textarea value={ticketReply} maxLength={8000} rows={2} onChange={e=>setTicketReply(e.target.value)} placeholder={appT('helpReply')}/><button disabled={!ticketReply.trim()} onClick={()=>{setTickets(old=>old.map(item=>item.id===ticketId?{...item,messages:[...item.messages,{by:'customer',text:ticketReply.trim(),time:new Date().toLocaleString()}]}:item));setTicketReply('');}}><Send size={16}/></button></div></>:<p>{appT('helpChooseThread')}</p>}</div></div>
+         <p className="vc-help-security">{appT('helpSupportNotice')}</p></div></section>}
        {notice&&<div role="status" className="vc-notice"><Info size={17}/>{notice}<button aria-label="Dismiss" onClick={()=>setNotice('')}><X size={14}/></button></div>}
        <footer className="vc-foot"><span>{t('footnote')}</span><span>{t('noData')}</span></footer>
      </div>
