@@ -53,7 +53,7 @@ function OperationsOverviewPage({onNavigate}:{onNavigate?:(screen:string)=>void}
   void load();
   const interval=window.setInterval(()=>void load(),120000);
   return ()=>{active=false;window.clearInterval(interval);};
- },[dates.range.from,dates.range.to,dates.range.timezone,dates.range.unit]);
+ },[dates.range.from,dates.range.to,dates.range.timezone,dates.range.unit,dates.refreshTick]);
  function detail(metric:Metric){
   if(!onNavigate)return;
   onNavigate(metric==='revenue'?'adminLedger':'adminInvestigations');
