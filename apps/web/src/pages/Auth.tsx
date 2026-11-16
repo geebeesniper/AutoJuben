@@ -39,14 +39,15 @@ export function AuthPage({onAuth}:{onAuth:(user:User,orgs:Org[])=>void}){
   if(mode==='forgot'){
    await authRequest('forgot-password',{email});setNotice('如果邮箱存在且可以接收邮件，你将收到重置密码链接。');return;
   }
-  const body=mode==='register'?{name,orgName,email,password}:{email,password};
+  const body: Record<string,string>={email,password};
+  if(mode==='register'){body.name=name;body.orgName=orgName;}
   const payload=await authRequest(mode==='register'?'register':'login',body);
   if(payload.user)onAuth(payload.user,payload.organizations);
   else if(payload.confirmationRequired)setNotice('注册已提交。请先在邮箱中完成账户验证，然后回来登录。');
  }catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{setBusy(false);}}
  const title={login:'欢迎回来',register:'创建你的创作空间',forgot:'找回密码',reset:'设置新密码'}[mode];
  const desc={login:'登录账户，查看创作任务、购买记录和付款方式。',register:'注册账号并建立第一个专属工作区。',forgot:'输入注册邮箱，我们将发送安全的密码重置邮件。',reset:'验证邮箱链接后，为你的账户设置新密码。'}[mode];
- return <div className="auth-shell"><aside className="auth-brand"><div className="auth-logo"><span className="logo-mark"><Clapperboard size={24}/></span><span>AUTOJUBEN <b>CLOUD</b></span></div><div className="auth-pitch"><span><Sparkles size={16}/> THE NEXT CREATIVE WORKSPACE</span><h1>灵感有无限可能。<br/><em>创作，更简单。</em></h1><p>让 AI 视频制作、创作历史、账号与支付全部集中在一个安全的 SaaS 平台。</p><div className="auth-highlights"><div><WandSparkles size={21}/> 9 图 + 音视频多模态生成</div><div><ShieldCheck size={21}/> 账户与支付数据安全隔离</div><div><PlayCircle size={21}/> 创作历史、积分与购买记录</div></div></div><div className="auth-bottom">AutoJuben SaaS / TypeScript + GraphQL <span>v0.4.0</span></div></aside>
+ return <div className="auth-shell"><aside className="auth-brand"><div className="auth-logo"><span className="logo-mark"><Clapperboard size={24}/></span><span>AUTOJUBEN <b>CLOUD</b></span></div><div className="auth-pitch"><span><Sparkles size={16}/> THE NEXT CREATIVE WORKSPACE</span><h1>灵感有无限可能。<br/><em>创作，更简单。</em></h1><p>让 AI 视频制作、创作历史、账号与支付全部集中在一个安全的 SaaS 平台。</p><div className="auth-highlights"><div><WandSparkles size={21}/> 9 图 + 音视频多模态生成</div><div><ShieldCheck size={21}/> 账户与支付数据安全隔离</div><div><PlayCircle size={21}/> 创作历史、积分与购买记录</div></div></div><div className="auth-bottom">AutoJuben SaaS / TypeScript + GraphQL <span>v0.6.0</span></div></aside>
  <main className="auth-side"><div className="auth-form"><div className="auth-welcome-icon">{mode==='forgot'||mode==='reset'?<KeyRound size={26}/>:<LockKeyhole size={26}/>}</div><div className="section-kicker">SECURE CUSTOMER ACCOUNT</div><h2>{title}</h2><p>{desc}</p><form onSubmit={e=>void submit(e)}>
  {mode==='register'&&<><label className="field"><span>显示名称</span><input minLength={2} maxLength={120} required value={name} onChange={e=>setName(e.target.value)} placeholder="你的姓名"/></label><label className="field"><span>工作区名称</span><input minLength={2} maxLength={160} required value={orgName} onChange={e=>setOrgName(e.target.value)} placeholder="例如：Creative Studio"/></label></>}
  {mode!=='reset'&&<label className="field"><span>邮箱</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label>}
