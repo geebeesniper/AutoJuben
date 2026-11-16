@@ -12,15 +12,6 @@ CREATE TABLE IF NOT EXISTS public.platform_admin_staff (
 );
 CREATE INDEX IF NOT EXISTS platform_admin_staff_role_active_idx ON public.platform_admin_staff(role,active);
 
-CREATE TABLE IF NOT EXISTS public.platform_messages (
- id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
- thread_id UUID NOT NULL,
- sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
- recipient_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
- content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 8000),
- internal BOOLEAN NOT NULL DEFAULT true,
- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
 CREATE TABLE IF NOT EXISTS public.platform_message_threads (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  subject TEXT NOT NULL CHECK(length(subject) BETWEEN 1 AND 200),
@@ -33,8 +24,15 @@ CREATE TABLE IF NOT EXISTS public.platform_message_threads (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE public.platform_messages ADD CONSTRAINT platform_messages_thread_fk
- FOREIGN KEY(thread_id) REFERENCES public.platform_message_threads(id) ON DELETE CASCADE;
+CREATE TABLE IF NOT EXISTS public.platform_messages (
+ id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ thread_id UUID NOT NULL REFERENCES public.platform_message_threads(id) ON DELETE CASCADE,
+ sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
+ recipient_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+ content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 8000),
+ internal BOOLEAN NOT NULL DEFAULT true,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE INDEX IF NOT EXISTS platform_message_threads_queue_idx ON public.platform_message_threads(status,priority,updated_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS platform_message_threads_customer_idx ON public.platform_message_threads(customer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS platform_messages_thread_cursor_idx ON public.platform_messages(thread_id,created_at ASC,id ASC);
