@@ -3,7 +3,8 @@ import { Activity,AlertTriangle,Check,CloudCog,Coins,CreditCard,KeyRound,Plus,Re
 import { formatDate,gql,type User } from '../lib/api';
 import { ApiMetricsPanel } from '../components/ApiMetricsPanel';
 import {useI18n} from '../i18n';
-type Area='adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
+import {TrendDateFilter,TrendLineCharts,useTrendDates,type TrendBucket,type Metric} from '../components/OperationsTrends';
+type Area='adminOverview'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
 type AdminUser={id:string;name:string;email:string;disabled:boolean;orgCount:number;orders:number;createdAt:string};
 type InvestigationEvent={eventType:string;eventId:string;orgId:string|null;orgName:string|null;userId:string|null;userEmail:string|null;createdAt:string;status:string;summary:string};
 type StaffMember={userId:string;name:string;email:string;role:string;active:boolean;updatedAt:string};
@@ -31,6 +32,41 @@ function csvDownload(filename:string,headers:string[],records:(string|number|nul
 }
 
 const Head=({tag,title,body}:{tag:string;title:string;body:string})=><div className="page-heading"><div><div className="section-kicker">{tag}</div><h1>{title}</h1><p>{body}</p></div></div>;
+function OperationsOverviewPage({onNavigate}:{onNavigate?:(screen:string)=>void}){
+ const {t}=useI18n(),dates=useTrendDates();
+ const [rows,setRows]=useState<TrendBucket[]>([]),[canRevenue,setCanRevenue]=useState(false),[hasPresence,setHasPresence]=useState(false);
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{
+  let active=true;
+  async function load(){
+   if(!active||document.visibilityState!=='visible')return;
+   setBusy(true);
+   try{
+    const result=await gql<{adminOverview:{canRevenue:boolean;hasPresence:boolean;buckets:TrendBucket[]}}>(
+     'query($from:String!,$to:String!,$timezone:String!,$unit:String!){adminOverview(from:$from,to:$to,timezone:$timezone,unit:$unit){canRevenue hasPresence buckets{key revenueCents alerts errors online peak}}}',
+     {from:dates.range.from,to:dates.range.to,timezone:dates.range.timezone,unit:dates.range.unit}
+    );
+    if(active){setRows(result.adminOverview.buckets);setCanRevenue(result.adminOverview.canRevenue);setHasPresence(result.adminOverview.hasPresence);setError('');}
+   }catch(e){if(active){setRows([]);setError(e instanceof Error?e.message:t('opsUnavailable'));}}
+   finally{if(active)setBusy(false);}
+  }
+  void load();
+  const interval=window.setInterval(()=>void load(),120000);
+  return ()=>{active=false;window.clearInterval(interval);};
+ },[dates.range.from,dates.range.to,dates.range.timezone,dates.range.unit]);
+ function detail(metric:Metric){
+  if(!onNavigate)return;
+  onNavigate(metric==='revenue'?'adminLedger':'adminInvestigations');
+ }
+ return <>
+  <Head tag="PLATFORM / OPERATIONS" title={t('adminCommandCenter')} body={t('adminOverviewDesc')}/>
+  <TrendDateFilter dates={dates} onRefresh={dates.refresh} busy={busy}/>
+  <p className="ops-overview-note">{t('opsActual')}</p>
+  {error&&<div className="notice danger" role="alert"><AlertTriangle size={16}/>{error}</div>}
+  <TrendLineCharts range={dates.range} rows={rows} source="live" loading={busy} error={error}
+    canRevenue={canRevenue} hasPresence={hasPresence} onOpen={onNavigate?detail:undefined}/>
+ </>;
+}
 function AdminUsers({current,onNotify}:{current:User;onNotify:(m:string,ok?:boolean)=>void}){
  const {t}=useI18n();
  const [selected,setSelected]=useState<AdminUser|null>(null),[timeline,setTimeline]=useState<InvestigationEvent[]>([]),[historyBusy,setHistoryBusy]=useState(false),[historyFrom,setHistoryFrom]=useState(''),[historyTo,setHistoryTo]=useState('');
@@ -281,7 +317,8 @@ function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
  </section></>;
 }
 
-export function AdminPage({section,user,onNotify}:{section:Area;user:User;onNotify:(m:string,ok?:boolean)=>void}){
+export function AdminPage({section,user,onNotify,onNavigate}:{section:Area;user:User;onNotify:(m:string,ok?:boolean)=>void;onNavigate?:(screen:string)=>void}){
+ if(section==='adminOverview')return <OperationsOverviewPage onNavigate={onNavigate}/>;
  if(section==='adminUsers')return <AdminUsers current={user} onNotify={onNotify}/>;
  if(section==='adminStaff')return <StaffPage onNotify={onNotify}/>;
  if(section==='adminLedger')return <LedgerPage onNotify={onNotify}/>;
