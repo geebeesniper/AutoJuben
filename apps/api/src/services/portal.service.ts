@@ -13,7 +13,7 @@ const ticketCategories=['general','generation','technical','billing','account'];
 const statuses=['open','pending','resolved','closed'];
 const isUUID=(v:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export const portalServiceQueries={
-  helpArticles:async (_:unknown,{category,search,locale,limit}:{category:string;search:string;locale:string;limit:number})=>{
+  helpArticles:async (_:unknown,{category,search,locale,limit}:{category:string;search:string;locale:string;limit:number},_ctx:Context)=>{
     assert(['',...helpCategories].includes(category),'无效知识库分类',400);
     assert(['zh','en','es'].includes(locale),'无效语言',400);
     assert(search.length<=100 && Number.isInteger(limit)&&limit>=1&&limit<=100,'检索参数无效',400);
