@@ -105,13 +105,6 @@ export async function adminOverviewRows(input:{
  ]);
  return {revenue:revenue.rows,alerts:alerts.rows,errors:errors.rows,presence:presence.rows,tracked:Boolean(anyPresence.rows[0]?.tracked)};
 }
-/** One sample per logged-in user per five-minute UTC bucket, even across tabs or devices. */
-export async function recordPresenceSample(userId:string){
- await query("INSERT INTO platform_presence_samples(user_id,sample_at) "
-  +"VALUES($1,date_bin('5 minutes',now(),'2000-01-01 00:00:00+00'::timestamptz)) "
-  +"ON CONFLICT(user_id,sample_at) DO NOTHING",[userId]);
-}
-
 export async function adminLedgerRows(args:{orgId:string;sourceType:string;search:string;from:string|null;to:string|null;before:string|null;limit:number}){
  return (await query(`SELECT l.id::text AS id,l.org_id AS "orgId",o.name AS "orgName",
  l.delta,l.source_type AS "sourceType",l.source_id AS "sourceId",
