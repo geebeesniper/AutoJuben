@@ -1,32 +1,92 @@
-# AutoJuben SaaS
+# AutoJuben SaaS v0.6.0 — MVC + GraphQL / REST / JSON
 
-TypeScript / MVC / GraphQL + REST + JSON, targeting Vercel and Supabase.
+**Target deployment:** Vercel (React + TypeScript and serverless functions) + Supabase (PostgreSQL / Auth / Private Storage / Cron). This release extends the existing v0.5 MVC codebase, preserving the old GraphQL and client pages while adding a consistent three-surface API and CMM/CMMI-aligned engineering controls.
 
-## Status
+## Read this first
 
-**Source import pending.** GitHub and Vercel project have been initialized, but the complete application source is not yet committed, and no production deployment has been validated.
+- **中文部署指南:** [`docs/中文版-部署指南.md`](docs/中文版-部署指南.md)
+- **Deployment guide:** [`docs/deploy-vercel-supabase-v0.6.md`](docs/deploy-vercel-supabase-v0.6.md)
+- **API protocols & examples:** [`docs/api-protocols.md`](docs/api-protocols.md)
+- **REST OpenAPI spec:** [`docs/openapi.json`](docs/openapi.json)
+- **CMM/CMMI engineering manual:** [`docs/cmm-quality-manual.md`](docs/cmm-quality-manual.md)
+- **Release process / protected files:** [`quality/CHANGE_CONTROL.md`](quality/CHANGE_CONTROL.md)
+- **Validation results:** [`quality/VALIDATION_RESULTS.md`](quality/VALIDATION_RESULTS.md)
+- **Quality targets:** [`quality/QUALITY_TARGETS.md`](quality/QUALITY_TARGETS.md)
+- **Original EXE reconstruction limits:** [`docs/exe-reconstruction-and-parity.md`](docs/exe-reconstruction-and-parity.md)
 
-- GitHub: https://github.com/geebeesniper/AutoJuben
-- Vercel: https://vercel.com/groundcmd/autojuben (Vite, Node 22)
-- Supabase: the presently authorized organization does not list a project. Do **not** run migrations until the correct project is identified.
+## Architecture
 
-## Upload the complete v0.6.0 archive (one manual upload)
+```text
+React / TypeScript (View: /app and /admin)
+              |
+    HTTP API adapters / schema
+     /graphql | /api/v1/* | /api/json
+              |
+   Controllers (HTTP and GraphQL adapters)
+              |
+   Services (RBAC / tenant / business logic)
+              |
+   Repositories (parameterized SQL)
+              |
+Supabase PostgreSQL + Auth + Storage
+              |
+  Stripe webhooks / 151 video provider (server-side)
+```
 
-1. Download `autojuben-cmm-mvc-3api-v0.6.0.zip` from the ChatGPT conversation. Do **not** unzip it for this automated import.
-2. On GitHub, use **Add file → Upload files** and upload the ZIP at **`imports/autojuben-cmm-mvc-3api-v0.6.0.zip`**. If the web uploader cannot specify a subfolder, create the `imports` folder via a placeholder file first, then open that folder and upload the ZIP.
-3. Commit to `main`. The workflow [Import verified AutoJuben v0.6.0 archive](.github/workflows/import-v0.6.0.yml) verifies its fixed SHA-256 checksum, safely extracts the app source into the repository root, installs dependencies, runs CMM protected file checks, architecture/API checks, TypeScript typecheck, unit tests and build, **then** publishes the source automatically to the isolated `candidate/v0.6.0` branch. It does not merge to `main`.
-4. Inspect the Actions tab. If checks fail, the candidate branch remains available for fixing errors. `main` remains unchanged until CI passes and you approve the PR. Review the Actions logs.
+**REST** resource URL + HTTP method, **JSON** typed action envelope, **GraphQL** schema query/mutation. The services are shared. JSON is a data format; the third transport is a JSON command interface. REST and GraphQL also use JSON for request/response bodies.
 
-Expected archive SHA-256: `f1b7df7a50f15c203c5f83f438b5b622ccde9bc8a837f2d3efffe88cd7977359`.
+### Structure
 
-Alternative: unzip the archive locally, copy **contents of `autojuben-saas/`** into your GitHub Desktop local repository root, and commit/push. Never commit `.env` or private keys.
+```text
+api/                         # Vercel Function entrypoints incl. Stripe/Cron
+apps/web/                    # React customer portal, admin, API Key management
+apps/api/src/
+  graphql/                   # Schema-first GraphQL
+  controllers/               # HTTP / GraphQL controller adapters
+  contracts/                 # REST/JSON operation DTO and allowlist
+  services/                  # Business logic and access control
+  repositories/              # SQL queries, key hashes, metrics
+  models/                    # Context, DTO, response envelope
+  auth/ billing/ provider/   # Core security, money, video provider
+  worker/ launcher/          # Async cron worker, launcher migration
+sql/001..005                 # Ordered Supabase schema migrations
+.github/workflows/quality.yml # CI quality gates
+quality/                     # Freeze, change control, quantified targets
+```
 
-## Deployment
+### Full features retained
 
-Vercel cannot link this repository automatically until you connect the **GitHub login provider to your Vercel account**, which is distinct from ChatGPT's GitHub plugin authorization. In Vercel dashboard → Account Settings → Authentication / Login Connections, connect the `geebeesniper` GitHub account; then connect this repo to the existing Vercel project.
+Client: email signup/login, password recovery, profile, project/video history, saved payment card metadata via Stripe Customer Portal, purchase history, wallet and checkout. Platform admin: search/disable users, orders, Stripe gateway settings, product catalog, tariff configuration, 151 video key/health. Workspace admin: video key, project/member permissions, API Key issue/revoke. Launcher migration: diagnostics, release preferences, backed-up metadata and cloud operator flows subject to original EXE limitations.
 
-All production credentials belong in Vercel encrypted project environment variables; do not place secrets in the repository. `MOCK_VIDEO_PROVIDER=true` is set as a safe default.
+### New in 0.6
 
-The complete source archive contains `sql/001_initial.sql` through `sql/005_api_quality.sql`. Only apply to a confirmed, backed-up Supabase project. GitHub Actions does not automatically alter the production database.
+- `GET/POST/PATCH/DELETE /api/v1/*`: 29 versioned REST operations.
+- `POST /api/json` with `{ "operation": "projects", "params": { "orgId": "..." } }`.
+- `POST /graphql`: original schema plus new `apiKeys`, `createApiKey`, `revokeApiKey`, and `apiMetrics` operations.
+- One transport-independent validator, strict DTO whitelist, tenant-restricted hashed API Keys (60/min, read/write), no admin/payment API Key scope.
+- Supabase `005_api_quality.sql`: api_keys and api_request_metrics. Admin observability for error rate, volume and P95.
+- Protected baseline hashes, change templates, API contract tests and CI quality checks.
 
-**Not a production-ready release until full CI, Supabase migrations, user login, video jobs, and Stripe test-mode end-to-end tests are verified.**
+## Pre-deployment verification
+
+```bash
+npm install
+npm run quality
+npm run typecheck
+npm test
+npm run build:web
+```
+
+`npm run quality` checks architecture, source contract mapping, protected hashes and security invariants. It is **not** a replacement for integration tests. Source ZIP generation environment has no complete npm dependency installation, so **production build and end-to-end payment verification are not claimed**. Install dependencies, run CI, then test against a staging Supabase before production.
+
+## Supabase migration (critical)
+
+- New project: `sql/001_initial.sql` → `002_launcher_port.sql` → `003_supabase_vercel.sql` → `004_customer_portal_payments.sql` → **`005_api_quality.sql`**.
+- Existing v0.5 project: back up DB, execute **only `005_api_quality.sql`**.
+- New tables are server-only, with RLS enabled and no anon/authenticated grants.
+
+## Launch safety
+
+`MOCK_VIDEO_PROVIDER=true` and payment flags off initially. Stripe **test mode** must pass full signed Webhook payment and refund reconciliation before any real payments. Original 151 API uses HTTP; do not send a production license unless upstream HTTPS becomes available.
+
+**CMM/CMMI note:** the repository implements engineering practices aligned with Level 3–5, but formal maturity certification and measured compliance cannot be conferred by shipping source code.

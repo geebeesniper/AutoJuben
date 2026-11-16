@@ -1,0 +1,29 @@
+{
+  "name": "autojuben-saas",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npx vercel dev",
+    "dev:api": "npx vercel dev",
+    "dev:web": "npm run dev --workspace @autojuben/web",
+    "build": "npm run build:web",
+    "start": "npx vercel dev",
+    "db:migrate": "npm run db:migrate --workspace @autojuben/api",
+    "test": "npm run test --workspace @autojuben/api",
+    "typecheck": "npm run typecheck --workspace @autojuben/api && npm run typecheck --workspace @autojuben/web",
+    "build:web": "npm run build --workspace @autojuben/web",
+    "build:api": "npm run typecheck --workspace @autojuben/api",
+    "test:mvc": "node scripts/check-mvc.mjs",
+    "quality": "node scripts/quality-gate.mjs && node scripts/check-mvc.mjs && node scripts/check-protected.mjs",
+    "check:protected": "node scripts/check-protected.mjs",
+    "test:contract": "npm run test --workspace @autojuben/api"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
