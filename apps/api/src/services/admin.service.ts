@@ -159,7 +159,7 @@ export const adminServiceMutations={
    assert(['support','billing','technical','compliance','internal'].includes(category),'无效分类');
    assert(['low','normal','high','urgent'].includes(priority),'优先级无效');
    if(customerId){assert(await findUserEmail(customerId),'客户不存在',404);}
-   if(assignedAdminId){const assigned=await findUserEmail(assignedAdminId);assert(assigned,'负责人不存在',404);assert(await platformRole(assigned),'负责人不是平台管理员',403);}
+   if(assignedAdminId){const assigned=await findUserEmail(assignedAdminId);assert(assigned,'负责人不存在',404);assert(isPlatformAdmin({id:assignedAdminId,name:'',email:assigned.email})||Boolean(await adminStaffRole(assignedAdminId)),'负责人不是平台管理员',403);}
    const created=await adminCreateThread(subject.trim(),category,priority,customerId||null,assignedAdminId||null,actor.user.id);
    await adminAudit(actor.user.id,'inbox.created','thread',created.id,{category,priority});
    return created.id as string;
@@ -176,7 +176,7 @@ export const adminServiceMutations={
    const actor=await asAdmin(ctx,'messaging');
    assert(['open','pending','resolved','closed'].includes(status),'无效工单状态');
    assert(['low','normal','high','urgent'].includes(priority),'无效优先级');
-   if(assignedAdminId){const a=await findUserEmail(assignedAdminId);assert(a,'负责人不存在',404);assert(await platformRole(a),'负责人不是管理员',403);}
+   if(assignedAdminId){const a=await findUserEmail(assignedAdminId);assert(a,'负责人不存在',404);assert(isPlatformAdmin({id:assignedAdminId,name:'',email:a.email})||Boolean(await adminStaffRole(assignedAdminId)),'负责人不是管理员',403);}
    const row=await adminChangeThread(threadId,status,priority,assignedAdminId||null);
    assert(row,'会话不存在',404);
    await adminAudit(actor.user.id,'inbox.updated','thread',threadId,{status,priority,assignedAdminId:assignedAdminId??null});
