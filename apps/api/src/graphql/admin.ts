@@ -13,7 +13,7 @@ export const adminTypeDefs=/* GraphQL */`
   createdAt: String! status: String! summary: String!
  }
  type AdminInboxThread {
-  id: ID! subject: String! category: String! status: String! priority: String!
+  id: ID! subject: String! channel: String! category: String! status: String! priority: String!
   customerId: ID customerEmail: String assignedAdminId: ID assignedAdmin: String
   createdAt: String! updatedAt: String! messageCount: Int!
  }
@@ -27,7 +27,7 @@ export const adminTypeDefs=/* GraphQL */`
   adminLedger(orgId: String="",sourceType: String="",search: String="",from: String="",to: String="",before: String="",limit: Int=50): [AdminLedgerEntry!]!
   adminInvestigations(orgId: String="",eventType: String="",search: String="",userId: String="",from: String="",to: String="",before: String="",limit: Int=50): [AdminInvestigationEvent!]!
   adminUserTimeline(userId: ID!,from: String="",to: String="",limit: Int=50): [AdminInvestigationEvent!]!
-  adminInbox(search: String="",status: String="",category: String="",limit: Int=50): [AdminInboxThread!]!
+  adminInbox(search: String="",status: String="",category: String="",channel: String="internal",limit: Int=50): [AdminInboxThread!]!
   adminMessages(threadId: ID!,limit: Int=100): [AdminInboxMessage!]!
   adminSearchUsers(search: String="",limit: Int=40,offset: Int=0): [AdminUser!]!
   adminOrders(search: String="",status: String="",limit: Int=80): [AdminOrder!]!
@@ -40,7 +40,7 @@ export const adminTypeDefs=/* GraphQL */`
  }
  extend type Mutation {
   adminSetStaffRole(userId: ID!,role: String!,active: Boolean!): Boolean!
-  adminCreateThread(subject: String!,category: String!,priority: String!,customerId: ID,assignedAdminId: ID): ID!
+  adminCreateThread(subject: String!,category: String!,priority: String!,customerId: ID,assignedAdminId: ID,channel: String="internal"): ID!
   adminSendMessage(threadId: ID!,content: String!): Boolean!
   adminUpdateThread(threadId: ID!,status: String!,priority: String!,assignedAdminId: ID): Boolean!
   adminSetUserDisabled(userId: ID!,disabled: Boolean!): Boolean!
