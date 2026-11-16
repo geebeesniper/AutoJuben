@@ -14,6 +14,45 @@
 - **Quality targets:** [`quality/QUALITY_TARGETS.md`](quality/QUALITY_TARGETS.md)
 - **Original EXE reconstruction limits:** [`docs/exe-reconstruction-and-parity.md`](docs/exe-reconstruction-and-parity.md)
 
+## GS-One / seedancecreat feature parity (source-backed migration)
+
+**Legacy source:** [geebeesniper/seedancecreat](https://github.com/geebeesniper/seedancecreat) (GS-One SaaS; last observed source uses TypeScript business services, original Vue frontend and Wails method bridge). This migration is **feature parity, not a wholesale code/DOM copy**. The existing AutoJuben MVC ownership, protected core and three API transports remain authoritative.
+
+These features were identified by inspecting the legacy repository's `src/services/dispatcher.ts`, `src/services/appService.ts`, `src/services/paymentService.ts`, `src/db/types.ts`, `public/wails-bridge.js`, and `README.md`. A legacy Wails method name alone is **not proof that its backend handler was implemented**. Original source scripts and templates must be preserved until their behavior is verified and matched.
+
+| Domain / original behavior | Existing AutoJuben owner | Migration state and acceptance criterion |
+| --- | --- | --- |
+| Tenant login, logout, profile, authorization | Auth / memberships / sessions | Existing implementation; requires Supabase DB and end-to-end customer/admin login tests; no hard-coded credentials. |
+| Create/rename/delete script project and list project episodes | Projects UI → core service → repository | Project CRUD already exists; **episode CRUD missing**. Persist episodes per project and tenant. |
+| Script selection / upload and structure detection (`SelectScriptFile`, `DetectScriptStructure`) | Projects + script service/repository (future) | **Schema staged in 006**; create server-side import/validation for txt/docx and explicit detection results. Do not store full scripts inside a short project description. |
+| Episode content, sequence and configuration (`GetProjectEpisodes`, `AddManualEpisode`, `UpdateEpisodeContent`, `SaveEpisodeConfig`) | Episode CRUD in existing Projects workflow (future) | **Schema staged in 006**; ordered episode list, edits, duration/splitting options and audit trail must be persisted. |
+| Scene/segment storyboard: dialogue, action, emotion, camera notes, shot order, insertion/removal | Storyboard in existing Studio / Project workflow (future) | **Schema staged in 006**; scene/shot records with stable IDs, sortable order, tenant verification and draft status. |
+| Automated split/subsplit, director/editor ranges, cancellation and retry (`StartPhysicalSplit`, `StartSubSplitEpisode`, `StartDirectorPipelineV2`, `StartEditorPipelineRange`) | Queue/worker services + repositories (future) | **Schema staged in 006**. Implement idempotent jobs and status reconciliation; no workflow is considered operational without a real handler and tests. |
+| Shot prompt versions, active version, references and role continuity (`AppendSegmentPromptVersion`, `SetSegmentActiveVersion`, `ReinjectSegmentRefs`) | Storyboard + prompt-version service (future) | **Schema staged in 006**; append-only revisions and explicit active-version selection; keep original source data. |
+| Character / scene / style assets and nine-image references; audio/video uploads | Existing Studio and private asset service | Media uploads exist; shot reference linkage is **staged in 006**. Verify asset permissions and preserve story/character consistency. |
+| Provider model mapping, generation tasks, queue progress, failures, project video library | Existing video-jobs service/provider and asset models | Exists in part. Map shot IDs to provider jobs, preserve failure recovery, history and source prompt versions. |
+| Wallet, recharge, Card/Alipay and Stripe orders | Existing credit/billing/portal services | Existing Stripe credit and order system; **legacy Alipay behavior is not yet implemented/matched**. No live payments or hidden charge simulations. |
+| SaaS account/admin, user/roles/credit/history and usage logs | Existing Admin + Portal + metrics | Existing surfaces require DB, real role-based authorization checks, and no exposed secrets. |
+| Video/music/film workflow, lip-sync, timeline edit, scene replacement, high-resolution export | Media-production roadmap, not existing API | Product requirements recorded from earlier work, **not verified as implemented in legacy repository**; require supported upstream provider capabilities and independent acceptance tests. |
+| Responsive frontend and Chinese/English/Spanish | Existing customer Studio, Admin, shared i18n | Locale switch is present; still requires per-screen translation audit and real authenticated UI checks. |
+
+### Migration and engineering constraints
+
+1. **In-place only:** modify existing Projects / Studio / API owners instead of adding parallel UI routers, duplicate event handlers, appended CSS overrides or Wails bridge wrappers. Use narrowly scoped, versioned **database schema migrations** for additive relational tables; they are not runtime code patches.
+2. **Frozen files:** `quality/PROTECTED_BASELINE.json` is authoritative for Core / auth / billing / operation contract and SQL 001–005. Do not change protected files or rebaseline hashes without explicit approval. The new `sql/006_script_storyboard.sql` is staged for review, **not applied**, and does not authorize altering earlier SQL.
+3. **One source of truth:** Projects → Episodes → Storyboard Shots → Prompt Versions → Video Jobs, with tenant-scoped foreign keys, private assets, server-side permissions and persistent database settings.
+4. **API parity:** any new operation must be implemented through the shared service once and surfaced consistently through GraphQL, REST and typed JSON command API, with contract tests and OpenAPI / schema updates.
+5. **Deploy gate:** install/typecheck/tests/build + protected hashes, multi-tenant authorization tests, Supabase migrations, Stripe test-mode ledger verification, production promotion review. A Preview HTTP 200 is never a claim that backend features work.
+6. **No fake functionality:** sample-only preview routes can remain available but cannot substitute for authenticated customer/admin accounts or a working video pipeline.
+
+### Legacy migration status
+
+- ✅ Legacy repository inspected and requirements traced to source modules (specification only).
+- ✅ Additive tenant-scoped database draft `sql/006_script_storyboard.sql` committed to candidate branch.
+- ⏳ Supabase project/database not yet provisioned or migrated; no live login credentials issued.
+- ⏳ Episode/shot services, CRUD APIs, pipeline workers, frontend editing controls and tests not yet implemented.
+- ⏳ Core contract changes require explicit independent review under frozen-baseline policy.
+
 ## Architecture
 
 ```text
