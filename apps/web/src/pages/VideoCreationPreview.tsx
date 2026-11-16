@@ -163,7 +163,7 @@ export function VideoCreationPreview(){
    <main className="vc-workspace">
      <header className="vc-topbar"><div className="vc-top-left">{pane==='create'&&<button className="vc-mobile-toggle" onClick={()=>setPanelOpen(true)} title={t('showPanel')}><Menu size={21}/></button>}<span className="vc-breadcrumb">{t('work')}</span><ChevronDown size={13}/><strong>{pane==='create'?t('newCreation'):pane==='explore'?t('explore'):pane==='library'?t('library'):pane==='helpCenter'?appT('nav_helpCenter'):appT('nav_helpDesk')}</strong></div><div className="vc-top-right"><span className="vc-preview-pill"><span/>{t('status')}</span><LanguageSelect compact/><a href="/preview/backend" className="vc-admin-link">{t('admin')}<ArrowRight size={14}/></a></div></header>
      <div className="vc-canvas-scroll">
-       <div className="vc-heading"><span className="vc-eyebrow"><Sparkles size={14}/> AUTOJUBEN / CREATIVE STUDIO</span><h1>{t('title')}</h1><p>{t('subtitle')}</p></div>
+       {(pane==='create'||pane==='explore'||pane==='library')&&<div className="vc-heading"><span className="vc-eyebrow"><Sparkles size={14}/> AUTOJUBEN / CREATIVE STUDIO</span><h1>{t('title')}</h1><p>{t('subtitle')}</p></div>}
        {pane==='create'&&<div className="vc-work-grid">
          <section className="vc-stage-card"><div className="vc-stage-head"><div><span className="vc-stage-head-icon"><Video size={17}/></span><b>{t('preview')}</b><small>{t('sample')}</small></div><span className="vc-render-tag"><span/>{t('sampleOnly')}</span></div>
            <div className="vc-stage-body"><div className={'vc-media-frame '+(ratio==='9:16'?'vc-portrait':ratio==='1:1'?'vc-square':'vc-landscape')} style={{aspectRatio:ratioStyle}}>
