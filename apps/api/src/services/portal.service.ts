@@ -1,4 +1,4 @@
-import { accountActivity,purchaseHistory,activeCatalog,renameUser,publishedHelpArticles,myHelpThreads,myHelpMessages,openHelpTicket,replyHelpTicket } from '../repositories/portal.repository.js';
+import { accountActivity,purchaseHistory,activeCatalog,renameUser,publishedHelpArticles,myHelpThreads,myHelpMessages,openHelpTicket,replyHelpTicket,recordPresenceSample } from '../repositories/portal.repository.js';
 import { isoDate,purchaseView } from '../models/view-models.js';
 import { requireMembership } from '../auth/sessions.js';
 import type { Context } from '../models/context.js';
@@ -60,6 +60,10 @@ export const portalServiceQueries={
  }
 };
 export const portalServiceMutations={
+ recordMyPresence:async (_:unknown,_args:unknown,ctx:Context)=>{
+  const user=requireUser(ctx);
+  await recordPresenceSample(user.id);return true;
+ },
   openHelpTicket:async (_:unknown,{category,subject,content}:{category:string;subject:string;content:string},ctx:Context)=>{
     const u=requireUser(ctx);
     assert(ticketCategories.includes(category),'请选择有效的问题类别',400);
