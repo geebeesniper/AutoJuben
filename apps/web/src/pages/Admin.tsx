@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { Activity,AlertTriangle,Check,CloudCog,Coins,CreditCard,KeyRound,Plus,RefreshCw,Save,Search,ShieldAlert,ShieldCheck,UsersRound,Webhook,X,BookOpen,Download,MessageSquareText,Send,ScanSearch,ShieldUser,ArrowLeft,ArrowRight,Clock3,Filter,UserRound } from 'lucide-react';
+import { Activity,AlertTriangle,Check,CloudCog,Coins,CreditCard,KeyRound,Plus,RefreshCw,Save,Search,ShieldAlert,ShieldCheck,UsersRound,Webhook,X,BookOpen,Download,MessageSquareText,Send,ScanSearch,ShieldCheck,ArrowLeft,ArrowRight,Clock3,Filter,UserRound } from 'lucide-react';
 import { formatDate,gql,type User } from '../lib/api';
 import { ApiMetricsPanel } from '../components/ApiMetricsPanel';
 import {useI18n} from '../i18n';
@@ -118,7 +118,7 @@ function StaffPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
  }
  return <><Head tag="GOVERNANCE / RBAC" title={t('adminStaff')} body={t('adminTeamDesc')}/>
  <section className="panel portal-card">
-  <div className="portal-card-heading"><ShieldUser size={20}/><h2>{t('adminRole')} · {roleInfo?.role??'—'}</h2><button className="btn btn-ghost" disabled={busy} onClick={()=>void load()}><RefreshCw size={15}/>{t('adminRefresh')}</button></div>
+  <div className="portal-card-heading"><ShieldCheck size={20}/><h2>{t('adminRole')} · {roleInfo?.role??'—'}</h2><button className="btn btn-ghost" disabled={busy} onClick={()=>void load()}><RefreshCw size={15}/>{t('adminRefresh')}</button></div>
   <div className="admin-role-summary">{roles.map(([id,label])=><span key={id}>{t(label)} · {id}</span>)}</div>
   <div className="portal-scroll"><table className="portal-table"><thead><tr><th>{t('name')}</th><th>Email</th><th>{t('adminRole')}</th><th>{t('status')}</th><th>{t('lastActive')}</th><th>{t('action')}</th></tr></thead>
    <tbody>{items.map(item=><tr key={item.userId}><td>{item.name}<small className="portal-mono">{item.userId}</small></td><td>{item.email}</td><td><b>{t(roles.find(r=>r[0]===item.role)?.[1]??item.role)}</b></td><td><span className={'portal-status '+(item.active?'paid':'failed')}>{item.active?t('adminActive'):t('adminInactive')}</span></td><td>{formatDate(item.updatedAt)}</td><td><button className="btn btn-ghost" onClick={()=>{setUserId(item.userId);setRole(item.role);setActive(item.active);}}>{t('details')}</button></td></tr>)}</tbody>
