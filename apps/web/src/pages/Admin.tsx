@@ -170,10 +170,45 @@ function LedgerPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
  </section></>;
 }
 
+
+function InvestigationsPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
+ const {t}=useI18n();
+ const [events,setEvents]=useState<InvestigationEvent[]>([]),[search,setSearch]=useState(''),[orgId,setOrgId]=useState(''),[userId,setUserId]=useState(''),[eventType,setEventType]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState(''),[before,setBefore]=useState(''),[stack,setStack]=useState<string[]>([]),[busy,setBusy]=useState(false),[selected,setSelected]=useState<InvestigationEvent|null>(null);
+ async function load(cursor=''){
+  setBusy(true);
+  try{const r=await gql<{adminInvestigations:InvestigationEvent[]}>('query($orgId:String!,$eventType:String!,$search:String!,$userId:String!,$from:String!,$to:String!,$before:String!){adminInvestigations(orgId:$orgId,eventType:$eventType,search:$search,userId:$userId,from:$from,to:$to,before:$before,limit:50){eventType eventId orgId orgName userId userEmail createdAt status summary}}',
+   {orgId,eventType,search,userId,from,to:validDateEnd(to),before:cursor});
+   setEvents(r.adminInvestigations);setBefore(cursor);
+  }catch(e){onNotify(e instanceof Error?e.message:'大数据排查失败');}
+  finally{setBusy(false);}
+ }
+ useEffect(()=>{void load();},[]);
+ return <><Head tag="OPERATIONS / FORENSICS" title={t('adminInvestigations')} body="使用时间、工作区、用户 UUID、事件类别和关键字排查视频、订单、审计和 API 请求。使用服务器端复合游标分页，每次最多100条。"/>
+ <section className="panel portal-card">
+  <div className="portal-card-heading"><ScanSearch size={20}/><h2>{t('adminFilters')}</h2><button disabled={!events.length} className="btn btn-ghost" onClick={()=>csvDownload('autojuben-investigations-page.csv',['Date','Type','ID','Workspace','User','Status','Summary'],events.map(e=>[e.createdAt,e.eventType,e.eventId,e.orgName,e.userEmail,e.status,e.summary]))}><Download size={15}/>{t('adminCsv')}</button></div>
+  <form className="admin-filter-bar" onSubmit={e=>{e.preventDefault();setStack([]);void load('');}}>
+   <label>{t('adminSearch')}<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Request / Task ID / email"/></label>
+   <label>{t('adminEventType')}<select value={eventType} onChange={e=>setEventType(e.target.value)}><option value="">{t('adminAll')}</option>{['video','order','audit','api','admin'].map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+   <label>{t('adminWorkspace')}<input value={orgId} onChange={e=>setOrgId(e.target.value)} placeholder="Org UUID"/></label>
+   <label>{t('adminUser')}<input value={userId} onChange={e=>setUserId(e.target.value)} placeholder="User UUID"/></label>
+   <label>{t('adminFrom')}<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <label>{t('adminTo')}<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+   <button className="btn btn-primary" disabled={busy} type="submit"><Filter size={15}/>{t('adminReload')}</button>
+  </form>
+  <div className="portal-scroll"><table className="portal-table"><thead><tr><th>{t('created')}</th><th>{t('adminEventType')}</th><th>Event ID</th><th>{t('adminUser')}</th><th>{t('adminWorkspace')}</th><th>{t('adminStatus')}</th><th>{t('details')}</th></tr></thead>
+  <tbody>{events.map(e=><tr key={e.eventType+e.eventId}><td>{formatDate(e.createdAt)}</td><td><span className="portal-status checkout">{e.eventType}</span></td><td className="portal-mono">{e.eventId.slice(0,18)}</td><td>{e.userEmail??'—'}</td><td>{e.orgName??'—'}</td><td>{e.status}</td><td><button className="btn btn-ghost" onClick={()=>setSelected(e)}>{t('details')}</button></td></tr>)}</tbody></table></div>
+  {!events.length&&<p className="portal-empty">{t('adminNoRecords')}</p>}
+  <div className="admin-pager"><button className="btn btn-ghost" disabled={busy||!stack.length} onClick={()=>{const prev=stack[stack.length-1];setStack(x=>x.slice(0,-1));void load(prev);}}><ArrowLeft size={15}/>{t('adminPrev')}</button><span>{events.length} / 50</span><button className="btn btn-ghost" disabled={busy||events.length<50} onClick={()=>{setStack(x=>[...x,before]);const e=events[events.length-1];void load(e.createdAt+'|'+e.eventType+'|'+e.eventId);}}>{t('adminNext')}<ArrowRight size={15}/></button></div>
+ </section>
+ {selected&&<section className="panel portal-card admin-detail-panel"><div className="portal-card-heading"><ScanSearch size={18}/><h2>{selected.eventType} / {selected.eventId}</h2><button className="icon-btn" onClick={()=>setSelected(null)} aria-label="Close"><X size={17}/></button></div><div className="admin-details-grid">{[['Date',selected.createdAt],['Status',selected.status],['User',selected.userEmail],['Org',selected.orgName],['Summary',selected.summary],['Event ID',selected.eventId]].map(([k,v])=><div key={k}><small>{k}</small><b>{v??'—'}</b></div>)}</div></section>}
+ </>;
+}
+
 export function AdminPage({section,user,onNotify}:{section:Area;user:User;onNotify:(m:string,ok?:boolean)=>void}){
  if(section==='adminUsers')return <AdminUsers current={user} onNotify={onNotify}/>;
  if(section==='adminStaff')return <StaffPage onNotify={onNotify}/>;
  if(section==='adminLedger')return <LedgerPage onNotify={onNotify}/>;
+ if(section==='adminInvestigations')return <InvestigationsPage onNotify={onNotify}/>;
  if(section==='adminOrders')return <AdminOrders onNotify={onNotify}/>;
  if(section==='adminPayments')return <GatewayPage onNotify={onNotify}/>;
  return <><ApiPage onNotify={onNotify}/><ApiMetricsPanel/></>;
