@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog } from 'lucide-react';
+import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog,MessageSquareText,BookOpen,ScanSearch,ShieldUser } from 'lucide-react';
 import { AuthPage } from './pages/Auth';
 import {DemoPreview} from './pages/DemoPreview';
 import {VideoCreationPreview} from './pages/VideoCreationPreview';
@@ -16,7 +16,7 @@ import { JobTable } from './components/JobTable';
 import { Status } from './components/Status';
 import { authRequest,formatDate,getWork,gql,type AppData,type Org,type User,type VideoJob } from './lib/api';
 import './pages/portal.css';
-type Screen='overview'|'studio'|'projects'|'jobs'|'team'|'settings'|'launcher'|'account'|'history'|'billing'|'purchases'|'shop'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi';
+type Screen='overview'|'studio'|'projects'|'jobs'|'team'|'settings'|'launcher'|'account'|'history'|'billing'|'purchases'|'shop'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
 type Section='workspace'|'customer'|'manage'|'platform';
 const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'overview',label:'概览面板',icon:<LayoutDashboard size={19}/>,section:'workspace'},
@@ -32,12 +32,17 @@ const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'team',label:'团队成员',icon:<Users size={19}/>,section:'manage'},
   {id:'settings',label:'工作区 API',icon:<Settings size={19}/>,section:'manage'},
   {id:'adminUsers',label:'用户管理',icon:<UsersRound size={19}/>,section:'platform'},
+  {id:'adminStaff',label:'管理员团队',icon:<ShieldUser size={19}/>,section:'platform'},
+  {id:'adminLedger',label:'账目流水',icon:<BookOpen size={19}/>,section:'platform'},
+  {id:'adminInvestigations',label:'大数据排查',icon:<ScanSearch size={19}/>,section:'platform'},
+  {id:'adminInbox',label:'消息中心',icon:<MessageSquareText size={19}/>,section:'platform'},
   {id:'adminOrders',label:'交易记录',icon:<Receipt size={19}/>,section:'platform'},
   {id:'adminPayments',label:'支付网关',icon:<Landmark size={19}/>,section:'platform'},
   {id:'adminApi',label:'平台 API 设置',icon:<CloudCog size={19}/>,section:'platform'}
 ];
 const portalScreens=['account','history','billing','purchases','shop'] as const;
-const adminScreens=['adminUsers','adminOrders','adminPayments','adminApi'] as const;
+const adminScreens=['adminUsers','adminStaff','adminLedger','adminInvestigations','adminInbox','adminOrders','adminPayments','adminApi'] as const;
+const adminScreenCapability:Partial<Record<Screen,string>>={adminUsers:'users',adminStaff:'staff',adminLedger:'ledger',adminInvestigations:'investigation',adminInbox:'messaging',adminOrders:'billing',adminPayments:'billing',adminApi:'operations'};
 function initialPage():Screen {const tab=new URLSearchParams(window.location.search).get('tab') as Screen;
  return nav.some(x=>x.id===tab)?tab:window.location.pathname==='/admin'?'adminUsers':'overview';}
 function JobDetails({j,org,onClose,onResolved,onNotify}:{j:VideoJob;org:Org;onClose:()=>void;onResolved:()=>void;onNotify:(s:string,ok?:boolean)=>void}){
@@ -63,16 +68,17 @@ function MainApp() {
   const [page,setPage]=useState<Screen>(initialPage);const [data,setData]=useState<AppData|null>(null);const [booting,setBooting]=useState(true);
   const [loading,setLoading]=useState(false);const [error,setError]=useState('');const [toast,setToast]=useState<{text:string;ok:boolean}|null>(null);
   const [platformAdmin,setPlatformAdmin]=useState(false);
+  const [adminCapabilities,setAdminCapabilities]=useState<string[]>([]);
   const [openJob,setOpenJob]=useState<VideoJob|null>(null);const [mobile,setMobile]=useState(false);const [demo,setDemo]=useState<boolean|null>(null);
   const org=orgs.find(o=>o.id===orgId)??orgs[0]??null;
   const notify=(text:string,ok=false)=>setToast({text,ok});
-  useEffect(()=>{authRequest('me').then(r=>{setUser(r.user);setOrgs(r.organizations);setOrgId(r.organizations[0]?.id??'');if(r.user)void gql<{viewerCapabilities:{platformAdmin:boolean}}>('query{viewerCapabilities{platformAdmin}}').then(x=>setPlatformAdmin(x.viewerCapabilities.platformAdmin)).catch(()=>setPlatformAdmin(false));}).catch(()=>{}).finally(()=>setBooting(false));
+  useEffect(()=>{authRequest('me').then(r=>{setUser(r.user);setOrgs(r.organizations);setOrgId(r.organizations[0]?.id??'');if(r.user)void gql<{viewerCapabilities:{platformAdmin:boolean;adminCapabilities:string[]}}>('query{viewerCapabilities{platformAdmin adminCapabilities}}').then(x=>{setPlatformAdmin(x.viewerCapabilities.platformAdmin);setAdminCapabilities(x.viewerCapabilities.adminCapabilities);}).catch(()=>{setPlatformAdmin(false);setAdminCapabilities([]);});}).catch(()=>{}).finally(()=>setBooting(false));
     fetch('/healthz').then(r=>r.json()).then(r=>setDemo(r.mode==='demo')).catch(()=>{});
   },[]);
   async function refresh(silent=false){if(!orgId)return;if(!silent)setLoading(true);try{const fresh=await getWork(orgId);setData(fresh);setError('');}catch(e){if(!silent)setError(e instanceof Error?e.message:'读取失败');}finally{if(!silent)setLoading(false);}}
   useEffect(()=>{if(!user||!orgId)return;setData(null);void refresh();const timer=setInterval(()=>{if(!document.hidden)void refresh(true);},8_000);return()=>clearInterval(timer);},[user?.id,orgId]);
   function onAuth(u:User,list:Org[]){setUser(u);setOrgs(list);setOrgId(list[0]?.id??'');setPage(initialPage());void gql<{viewerCapabilities:{platformAdmin:boolean}}>('query{viewerCapabilities{platformAdmin}}').then(x=>setPlatformAdmin(x.viewerCapabilities.platformAdmin)).catch(()=>{});}
-  async function logout(){try{await authRequest('logout',{});}finally{setUser(null);setData(null);setOrgId('');setOrgs([]);setPlatformAdmin(false);}}
+  async function logout(){try{await authRequest('logout',{});}finally{setUser(null);setData(null);setOrgId('');setOrgs([]);setPlatformAdmin(false);setAdminCapabilities([]);}}
   async function addOrg(){const name=window.prompt('请输入新工作区名称：');if(!name?.trim())return;try{const r=await gql<{createOrganization:Org}>(`mutation($name:String!){createOrganization(name:$name){id name slug role createdAt}}`,{name});setOrgs(prev=>[...prev,r.createOrganization]);setOrgId(r.createOrganization.id);setPage('overview');notify('工作区已建立',true);}catch(e){notify(e instanceof Error?e.message:'创建工作区失败');}}
   function navigate(p:string){setPage(p as Screen);setMobile(false);window.history.replaceState({},'',`${adminScreens.includes(p as typeof adminScreens[number])?'/admin':'/app'}?tab=${p}`);window.scrollTo({top:0,behavior:'smooth'});}
   if(booting)return <div className="boot-screen"><span className="logo-mark"><Clapperboard size={26}/></span><p>AutoJuben Cloud · {t('loading')}</p></div>;
@@ -81,7 +87,7 @@ function MainApp() {
     <div className="workspace-picker"><span>{t('currentWorkspace')}</span><div className="workspace-picker-row"><div className="workspace-square">{org?.name?.slice(0,1).toUpperCase()??'A'}</div><select value={org?.id??''} onChange={e=>setOrgId(e.target.value)} aria-label="切换工作区">{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select><ChevronDown size={14}/></div></div>
     <div className="nav-scroll">{(['workspace','customer','manage','platform'] as Section[]).filter(section=>section!=='platform'||platformAdmin).map(section=><div key={section}>
         <div className="nav-label manage-label">{t(({workspace:'workspace',customer:'customerArea',manage:'management',platform:'platformArea'} as const)[section])}</div>
-        {nav.filter(n=>n.section===section).filter(n=>n.section!=='manage'||['owner','admin'].includes(org?.role??'')).map(n=><button key={n.id} className={`nav-link ${page===n.id?'active':''}`} onClick={()=>navigate(n.id)}>{n.icon}<span>{t('nav_'+n.id)}</span>{page===n.id&&<span className="nav-active-dot"/>}</button>)}
+        {nav.filter(n=>n.section===section).filter(n=>n.section!=='manage'||['owner','admin'].includes(org?.role??'')).filter(n=>n.section!=='platform'||adminCapabilities.includes(adminScreenCapability[n.id]??'')).map(n=><button key={n.id} className={`nav-link ${page===n.id?'active':''}`} onClick={()=>navigate(n.id)}>{n.icon}<span>{t('nav_'+n.id)}</span>{page===n.id&&<span className="nav-active-dot"/>}</button>)}
       </div>)}
       <button className="nav-link create-workspace" onClick={()=>void addOrg()}><Plus size={18}/><span>{t('createWorkspace')}</span></button>
     </div>
@@ -100,8 +106,8 @@ function MainApp() {
         {page==='settings'&&<SettingsPage org={org} onNotify={notify}/>}
         {page==='launcher'&&<LauncherPage org={org} onNotify={notify}/>}
         {portalScreens.some(x=>x===page)&&<PortalPage section={page as typeof portalScreens[number]} org={org} user={user} onUpdate={setUser} onNotify={notify}/>}
-        {platformAdmin&&adminScreens.some(x=>x===page)&&<AdminPage section={page as typeof adminScreens[number]} user={user} onNotify={notify}/>}
-        {!platformAdmin&&adminScreens.some(x=>x===page)&&<div className="notice danger">当前账户没有平台管理员权限。</div>}
+        {platformAdmin&&adminScreens.some(x=>x===page)&&adminCapabilities.includes(adminScreenCapability[page]??'')&&<AdminPage section={page as typeof adminScreens[number]} user={user} onNotify={notify}/>}
+        {adminScreens.some(x=>x===page)&&(!platformAdmin||!adminCapabilities.includes(adminScreenCapability[page]??''))&&<div className="notice danger">{t('adminPermissionDenied')}</div>}
       </>:!loading&&!error?<div className="loading-panel"><Activity size={30} className="spin"/><p>正在加载你的工作区…</p></div>:null}</div>
     <footer className="app-footer"><span>© AutoJuben Cloud · TypeScript / GraphQL</span><span>{t('workspace')} · v0.6.0</span></footer>
     </main>{openJob&&org&&<JobDetails j={data?.jobs.find(x=>x.id===openJob.id)??openJob} org={org} onClose={()=>setOpenJob(null)} onResolved={()=>void refresh()} onNotify={notify}/>} {toast&&<div className={`toast ${toast.ok?'toast-ok':'toast-err'}`} role="status"><span>{toast.ok?<CheckCircle2 size={17}/>:<CircleAlert size={17}/>}</span>{toast.text}<button onClick={()=>setToast(null)} aria-label="关闭提醒"><X size={15}/></button></div>}
