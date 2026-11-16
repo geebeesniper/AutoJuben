@@ -117,7 +117,7 @@ function MainApp() {
         {page==='settings'&&<SettingsPage org={org} onNotify={notify}/>}
         {page==='launcher'&&<LauncherPage org={org} onNotify={notify}/>}
         {portalScreens.some(x=>x===page)&&<PortalPage section={page as typeof portalScreens[number]} org={org} user={user} onUpdate={setUser} onNotify={notify}/>}
-        {platformAdmin&&adminScreens.some(x=>x===page)&&adminCapabilities.includes(adminScreenCapability[page]??'')&&<AdminPage section={page as typeof adminScreens[number]} user={user} onNotify={notify}/>}
+        {platformAdmin&&adminScreens.some(x=>x===page)&&adminCapabilities.includes(adminScreenCapability[page]??'')&&<AdminPage section={page as typeof adminScreens[number]} user={user} onNotify={notify} onNavigate={navigate}/>}
         {adminScreens.some(x=>x===page)&&(!platformAdmin||!adminCapabilities.includes(adminScreenCapability[page]??''))&&<div className="notice danger">{t('adminPermissionDenied')}</div>}
       </>:!loading&&!error?<div className="loading-panel"><Activity size={30} className="spin"/><p>正在加载你的工作区…</p></div>:null}</div>
     <footer className="app-footer"><span>© AutoJuben Cloud · TypeScript / GraphQL</span><span>{t('workspace')} · v0.6.0</span></footer>
