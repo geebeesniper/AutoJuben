@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.project_scripts (
   CONSTRAINT project_scripts_project_tenant_fk
     FOREIGN KEY(org_id,project_id) REFERENCES public.projects(org_id,id) ON DELETE CASCADE
 );
+CREATE UNIQUE INDEX IF NOT EXISTS project_scripts_org_id_id_unique ON public.project_scripts(org_id,id);
 CREATE INDEX IF NOT EXISTS project_scripts_org_project_idx ON public.project_scripts(org_id,project_id,created_at DESC);
 
 -- One script project has ordered episodes, each containing ordered storyboard shots.
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.project_episodes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   project_id UUID NOT NULL,
-  script_id UUID REFERENCES public.project_scripts(id) ON DELETE SET NULL,
+  script_id UUID,
   episode_number INTEGER NOT NULL CHECK(episode_number BETWEEN 1 AND 100000),
   title TEXT NOT NULL DEFAULT '',
   summary TEXT NOT NULL DEFAULT '',
@@ -50,6 +51,8 @@ CREATE TABLE IF NOT EXISTS public.project_episodes (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT project_episodes_project_tenant_fk
     FOREIGN KEY(org_id,project_id) REFERENCES public.projects(org_id,id) ON DELETE CASCADE,
+  CONSTRAINT project_episodes_script_tenant_fk
+    FOREIGN KEY(org_id,script_id) REFERENCES public.project_scripts(org_id,id) ON DELETE SET NULL (script_id),
   CONSTRAINT project_episodes_number_unique UNIQUE(org_id,project_id,episode_number)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS project_episodes_org_id_id_unique ON public.project_episodes(org_id,id);
@@ -141,7 +144,7 @@ CREATE TABLE IF NOT EXISTS public.storyboard_pipeline_runs (
   CONSTRAINT storyboard_pipeline_project_tenant_fk
     FOREIGN KEY(org_id,project_id) REFERENCES public.projects(org_id,id) ON DELETE CASCADE,
   CONSTRAINT storyboard_pipeline_episode_tenant_fk
-    FOREIGN KEY(org_id,episode_id) REFERENCES public.project_episodes(org_id,id) ON DELETE SET NULL,
+    FOREIGN KEY(org_id,episode_id) REFERENCES public.project_episodes(org_id,id) ON DELETE SET NULL (episode_id),
   CONSTRAINT storyboard_pipeline_client_request_unique UNIQUE(org_id,client_request_id)
 );
 CREATE INDEX IF NOT EXISTS storyboard_pipeline_queue_idx
