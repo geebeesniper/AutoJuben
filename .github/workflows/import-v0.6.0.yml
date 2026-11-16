@@ -1,0 +1,68 @@
+name: Import verified AutoJuben v0.6.0 archive
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'imports/autojuben-cmm-mvc-3api-v0.6.0.zip'
+permissions:
+  contents: write
+jobs:
+  verify-and-import:
+    if: github.repository == 'geebeesniper/AutoJuben'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b163ceaaa4a8d0e9d434f3a2c78 # v4.2.2
+        with:
+          persist-credentials: true
+      - name: Verify checksum and safely extract into repository root
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, zipfile
+          archive=pathlib.Path('imports/autojuben-cmm-mvc-3api-v0.6.0.zip')
+          expected='f1b7df7a50f15c203c5f83f438b5b622ccde9bc8a837f2d3efffe88cd7977359'
+          assert archive.exists(), 'missing archive'
+          actual=hashlib.sha256(archive.read_bytes()).hexdigest()
+          assert actual == expected, f'archive sha256 mismatch: {actual}'
+          root=pathlib.Path.cwd()
+          with zipfile.ZipFile(archive) as z:
+            members=z.infolist()
+            assert len(members)==145, f'unexpected file count: {len(members)}'
+            for member in members:
+              path=pathlib.PurePosixPath(member.filename)
+              if member.is_dir(): continue
+              assert path.parts and path.parts[0]=='autojuben-saas' and len(path.parts)>1
+              assert '..' not in path.parts and not member.filename.startswith('/')
+              rel=pathlib.Path(*path.parts[1:])
+              assert rel.name not in ('.env', '.env.local', '.env.production')
+              # Retain the hardened CI workflow already committed in GitHub.
+              if rel.as_posix()=='.github/workflows/quality.yml': continue
+              dest=root/rel
+              dest.parent.mkdir(parents=True,exist_ok=True)
+              dest.write_bytes(z.read(member))
+          print('Verified and extracted',len(members),'archive entries')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Protected module checksum
+        run: npm run check:protected
+      - name: Architecture and contract gate
+        run: npm run quality
+      - name: TypeScript type check
+        run: npm run typecheck
+      - name: Unit and contract tests
+        run: npm test
+      - name: Production build
+        run: npm run build:web
+      - name: Commit verified source
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet || git commit -m 'feat: import verified AutoJuben MVC API SaaS v0.6.0'
+          git push origin HEAD:main
