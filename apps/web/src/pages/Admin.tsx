@@ -204,11 +204,88 @@ function InvestigationsPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
  </>;
 }
 
+
+function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
+ const {t}=useI18n();
+ const [threads,setThreads]=useState<InboxThread[]>([]),[selected,setSelected]=useState<InboxThread|null>(null),[messages,setMessages]=useState<InboxMessage[]>([]);
+ const [search,setSearch]=useState(''),[status,setStatus]=useState(''),[category,setCategory]=useState(''),[busy,setBusy]=useState(false);
+ const [draft,setDraft]=useState(''),[subject,setSubject]=useState(''),[customerId,setCustomerId]=useState(''),[priority,setPriority]=useState('normal'),[adding,setAdding]=useState(false);
+ async function load(){
+  setBusy(true);
+  try{const r=await gql<{adminInbox:InboxThread[]}>('query($search:String!,$status:String!,$category:String!){adminInbox(search:$search,status:$status,category:$category,limit:80){id subject category status priority customerId customerEmail assignedAdminId assignedAdmin createdAt updatedAt messageCount}}',{search,status,category});
+   setThreads(r.adminInbox);
+  }catch(e){onNotify(e instanceof Error?e.message:'站内消息读取失败');}finally{setBusy(false);}
+ }
+ async function open(thread:InboxThread){
+  setSelected(thread);setBusy(true);
+  try{const r=await gql<{adminMessages:InboxMessage[]}>('query($threadId:ID!){adminMessages(threadId:$threadId,limit:100){id threadId senderId senderName senderEmail content internal createdAt}}',{threadId:thread.id});
+   setMessages(r.adminMessages);
+  }catch(e){onNotify(e instanceof Error?e.message:'消息查询失败');}finally{setBusy(false);}
+ }
+ useEffect(()=>{void load();},[]);
+ async function create(){
+  if(subject.trim().length<3)return;
+  setBusy(true);
+  try{
+   const r=await gql<{adminCreateThread:string}>('mutation($subject:String!,$category:String!,$priority:String!,$customerId:ID){adminCreateThread(subject:$subject,category:$category,priority:$priority,customerId:$customerId)}',
+   {subject:subject.trim(),category:category||'internal',priority,customerId:customerId||null});
+   setSubject('');setAdding(false);onNotify('内部会话已创建',true);
+   const latest=await gql<{adminInbox:InboxThread[]}>('query{adminInbox(limit:80){id subject category status priority customerId customerEmail assignedAdminId assignedAdmin createdAt updatedAt messageCount}}');
+   setThreads(latest.adminInbox);const found=latest.adminInbox.find(x=>x.id===r.adminCreateThread);if(found)await open(found);
+  }catch(e){onNotify(e instanceof Error?e.message:'创建失败');}finally{setBusy(false);}
+ }
+ async function send(){
+  if(!selected||!draft.trim())return;
+  setBusy(true);
+  try{await gql('mutation($threadId:ID!,$content:String!){adminSendMessage(threadId:$threadId,content:$content)}',{threadId:selected.id,content:draft});
+   setDraft('');await open(selected);await load();
+  }catch(e){onNotify(e instanceof Error?e.message:'发送失败');}finally{setBusy(false);}
+ }
+ async function update(next:string){
+  if(!selected)return;
+  setBusy(true);
+  try{await gql('mutation($threadId:ID!,$status:String!,$priority:String!){adminUpdateThread(threadId:$threadId,status:$status,priority:$priority)}',{threadId:selected.id,status:next,priority:selected.priority});
+   setSelected({...selected,status:next});await load();
+  }catch(e){onNotify(e instanceof Error?e.message:'状态修改失败');}finally{setBusy(false);}
+ }
+ return <><Head tag="COLLABORATION / MESSENGER" title={t('adminInbox')} body="管理员间内部消息和工单协作，记录状态、优先级、负责人和历史消息。"/>
+ <section className="panel portal-card">
+  <div className="portal-card-heading"><MessageSquareText size={20}/><h2>{t('adminMessageHistory')}</h2><button className="btn btn-primary" onClick={()=>setAdding(x=>!x)}><Plus size={15}/>{t('adminNewThread')}</button></div>
+  {adding&&<div className="admin-filter-bar">
+   <label>{t('adminSubject')}<input value={subject} maxLength={200} onChange={e=>setSubject(e.target.value)}/></label>
+   <label>{t('adminCategory')}<select value={category||'internal'} onChange={e=>setCategory(e.target.value)}>{['internal','support','billing','technical','compliance'].map(x=><option key={x}>{x}</option>)}</select></label>
+   <label>{t('adminPriority')}<select value={priority} onChange={e=>setPriority(e.target.value)}>{['low','normal','high','urgent'].map(x=><option key={x}>{x}</option>)}</select></label>
+   <label>Customer UUID (optional)<input value={customerId} onChange={e=>setCustomerId(e.target.value)} placeholder="Existing user UUID"/></label>
+   <button className="btn btn-primary" disabled={busy||subject.trim().length<3} onClick={()=>void create()}>{t('adminCreate')}</button>
+  </div>}
+  <form className="admin-filter-bar" onSubmit={e=>{e.preventDefault();void load();}}>
+   <label>{t('adminSearch')}<input value={search} onChange={e=>setSearch(e.target.value)}/></label>
+   <label>{t('adminStatus')}<select value={status} onChange={e=>setStatus(e.target.value)}><option value="">{t('adminAll')}</option>{['open','pending','resolved','closed'].map(x=><option key={x}>{x}</option>)}</select></label>
+   <button className="btn btn-ghost" disabled={busy} type="submit"><Search size={15}/>{t('adminReload')}</button>
+  </form>
+  <div className="admin-messenger-layout"><div className="admin-thread-list">
+   {threads.map(x=><button type="button" key={x.id} className={'admin-thread '+(selected?.id===x.id?'selected':'')} onClick={()=>void open(x)}>
+    <span className="admin-thread-title"><b>{x.subject}</b><small>{x.messageCount}</small></span><span>{x.category} · {x.priority}</span><small>{formatDate(x.updatedAt)} · {x.status}</small></button>)}
+   {!threads.length&&<p className="portal-empty">{t('adminNoRecords')}</p>}
+  </div><div className="admin-chat-pane">
+   {selected?<><div className="admin-chat-head"><strong>{selected.subject}</strong><div><span className="portal-status checkout">{selected.priority}</span>
+    <select value={selected.status} onChange={e=>void update(e.target.value)} disabled={busy}>{['open','pending','resolved','closed'].map(x=><option key={x} value={x}>{x}</option>)}</select></div></div>
+   <div className="admin-chat-messages">{messages.map(x=><article key={x.id} className="admin-chat-bubble"><div><strong>{x.senderName}</strong><small>{formatDate(x.createdAt)}</small></div><p>{x.content}</p></article>)}
+    {!messages.length&&<p className="portal-help">{t('adminNoRecords')}</p>}</div>
+   <div className="admin-chat-compose"><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder={t('adminCompose')} maxLength={8000} rows={3}/>
+    <button className="btn btn-primary" disabled={busy||!draft.trim()||selected.status==='closed'} onClick={()=>void send()}><Send size={16}/>{t('adminReply')}</button></div></>
+   :<p className="portal-empty">{t('adminNoSelection')}</p>}
+  </div></div>
+  <p className="portal-help"><ShieldCheck size={14}/> {t('adminInternalOnly')}</p>
+ </section></>;
+}
+
 export function AdminPage({section,user,onNotify}:{section:Area;user:User;onNotify:(m:string,ok?:boolean)=>void}){
  if(section==='adminUsers')return <AdminUsers current={user} onNotify={onNotify}/>;
  if(section==='adminStaff')return <StaffPage onNotify={onNotify}/>;
  if(section==='adminLedger')return <LedgerPage onNotify={onNotify}/>;
  if(section==='adminInvestigations')return <InvestigationsPage onNotify={onNotify}/>;
+ if(section==='adminInbox')return <InboxPage onNotify={onNotify}/>;
  if(section==='adminOrders')return <AdminOrders onNotify={onNotify}/>;
  if(section==='adminPayments')return <GatewayPage onNotify={onNotify}/>;
  return <><ApiPage onNotify={onNotify}/><ApiMetricsPanel/></>;
