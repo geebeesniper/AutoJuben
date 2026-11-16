@@ -20,7 +20,7 @@ Commit generated `package-lock.json`, change CI from `npm install` to `npm ci` a
 ## 2. Supabase setup
 
 - New project in https://supabase.com/dashboard, enable Email sign-in.
-- SQL Editor: for **new** DB execute `sql/001_initial.sql`, then `002_launcher_port.sql`, `003_supabase_vercel.sql`, `004_customer_portal_payments.sql`, finally `005_api_quality.sql`. Existing v0.5 DB: **only execute `005_api_quality.sql`**, after backup.
+- SQL Editor: for a **new** DB execute `sql/001_initial.sql`, `002_launcher_port.sql`, `003_supabase_vercel.sql`, `004_customer_portal_payments.sql`, `005_api_quality.sql`, and then `007_provider_api_routes.sql` (workspace-editable upstream video API paths). The independent storyboard `006_script_storyboard.sql` remains staged for review. For an existing DB, back up first and apply **only the migrations that have not already been applied**; never rerun earlier migrations blindly.
 - Storage: create private bucket `autojuben-media`.
 - Connect → Transaction pooler: copy the real connection string (`:6543`) into `DATABASE_URL`; use URL-encoded password. Node `pg` uses no named prepared statements. Keep DB password server-side.
 - Auth → URL Configuration: set Site URL to the actual Vercel domain and allow `https://YOUR_DOMAIN/?auth=reset` callback.
