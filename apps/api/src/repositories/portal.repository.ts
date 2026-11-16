@@ -39,6 +39,7 @@ export async function myHelpMessages(userId:string,threadId:string,limit:number)
  u.name AS "senderName",m.content,m.created_at AS "createdAt",
  (m.sender_id=$1) AS "mine"
  FROM platform_messages m JOIN users u ON u.id=m.sender_id
+ JOIN platform_message_threads t ON t.id=m.thread_id AND t.channel='customer' AND t.customer_id=$1
  WHERE m.thread_id=$2 AND m.internal=false
  ORDER BY m.id DESC LIMIT $3`,[userId,threadId,limit])).rows.reverse();
 }
