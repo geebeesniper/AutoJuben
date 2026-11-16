@@ -71,6 +71,47 @@ export async function adminAudit(actorId:string,action:string,targetType?:string
  VALUES($1,$2,$3,$4,$5::jsonb)`,[actorId,action,targetType??null,targetId??null,JSON.stringify(metadata)]);
 }
 /** Cursor-based billing ledger: stable monotonic IDs, bounded 100 rows. */
+/** Indexed, bounded time-series queries for Operations Overview. No simulated production data. */
+export async function adminOverviewRows(input:{
+ from:string;to:string;timezone:string;unit:'hour'|'day';withRevenue:boolean;
+}){
+ // The entire expression is selected by server code; column identifiers are never user supplied.
+ const bucket=(column:string)=>input.unit==='hour'
+  ?"to_char(date_trunc('hour', "+column+" AT TIME ZONE 'UTC'), 'YYYY-MM-DD\"T\"HH24:00:00\"Z\"')"
+  :"to_char("+column+" AT TIME ZONE $3, 'YYYY-MM-DD')";
+ const p=[input.from,input.to,input.timezone];
+ const revenueSql='SELECT '+bucket('o.paid_at')+' AS key, SUM(GREATEST(o.amount_cents-o.refunded_amount_cents,0))::bigint AS value '
+  +"FROM purchase_orders o WHERE o.paid_at >= $1::timestamptz AND o.paid_at < $2::timestamptz "
+  +"AND o.status IN ('paid','partially_refunded','refunded') GROUP BY 1 ORDER BY 1";
+ const alertsSql='SELECT '+bucket('a.occurred_at')+' AS key, COUNT(*)::bigint AS value FROM ('
+  +"SELECT coalesce(v.finished_at,v.updated_at) AS occurred_at FROM video_jobs v WHERE v.status='failed' "
+  +'AND coalesce(v.finished_at,v.updated_at)>=$1::timestamptz AND coalesce(v.finished_at,v.updated_at)<$2::timestamptz '
+  +'UNION ALL SELECT t.created_at FROM platform_message_threads t '
+  +"WHERE t.channel='customer' AND t.priority IN ('high','urgent') "
+  +'AND t.created_at >= $1::timestamptz AND t.created_at < $2::timestamptz'
+  +') a GROUP BY 1 ORDER BY 1';
+ const errorsSql='SELECT '+bucket('m.occurred_at')+' AS key, COUNT(*)::bigint AS value FROM api_request_metrics m '
+  +'WHERE m.occurred_at>=$1::timestamptz AND m.occurred_at<$2::timestamptz '
+  +'AND (m.http_status>=500 OR m.graphql_errors>0) GROUP BY 1 ORDER BY 1';
+ const presenceSql="SELECT s.sample_at AS tick, COUNT(*)::int AS users FROM platform_presence_samples s "
+  +"WHERE s.sample_at>=$1::timestamptz AND s.sample_at<$2::timestamptz "
+  +"GROUP BY s.sample_at ORDER BY s.sample_at";
+ const [revenue,alerts,errors,presence,anyPresence]=await Promise.all([
+  input.withRevenue?query<{key:string;value:string}>(revenueSql,p):Promise.resolve({rows:[] as {key:string;value:string}[]}),
+  query<{key:string;value:string}>(alertsSql,p),
+  query<{key:string;value:string}>(errorsSql,p),
+  query<{tick:Date;users:number}>(presenceSql,[input.from,input.to]),
+  query<{tracked:boolean}>('SELECT EXISTS(SELECT 1 FROM platform_presence_samples LIMIT 1) AS tracked')
+ ]);
+ return {revenue:revenue.rows,alerts:alerts.rows,errors:errors.rows,presence:presence.rows,tracked:Boolean(anyPresence.rows[0]?.tracked)};
+}
+/** One sample per logged-in user per five-minute UTC bucket, even across tabs or devices. */
+export async function recordPresenceSample(userId:string){
+ await query("INSERT INTO platform_presence_samples(user_id,sample_at) "
+  +"VALUES($1,date_bin('5 minutes',now(),'2000-01-01 00:00:00+00'::timestamptz)) "
+  +"ON CONFLICT(user_id,sample_at) DO NOTHING",[userId]);
+}
+
 export async function adminLedgerRows(args:{orgId:string;sourceType:string;search:string;from:string|null;to:string|null;before:string|null;limit:number}){
  return (await query(`SELECT l.id::text AS id,l.org_id AS "orgId",o.name AS "orgName",
  l.delta,l.source_type AS "sourceType",l.source_id AS "sourceId",
