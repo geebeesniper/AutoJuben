@@ -133,9 +133,47 @@ function StaffPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
  </section></>;
 }
 
+
+function LedgerPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
+ const {t}=useI18n();
+ const [items,setItems]=useState<LedgerEntry[]>([]),[orgId,setOrgId]=useState(''),[search,setSearch]=useState(''),[source,setSource]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState(''),[before,setBefore]=useState(''),[stack,setStack]=useState<string[]>([]),[busy,setBusy]=useState(false);
+ async function load(cursor=''){
+  setBusy(true);
+  try{
+   const r=await gql<{adminLedger:LedgerEntry[]}>('query($orgId:String!,$sourceType:String!,$search:String!,$from:String!,$to:String!,$before:String!){adminLedger(orgId:$orgId,sourceType:$sourceType,search:$search,from:$from,to:$to,before:$before,limit:50){id orgId orgName delta sourceType sourceId createdAt}}',
+    {orgId,sourceType:source,search,from,to:validDateEnd(to),before:cursor});
+   setItems(r.adminLedger);setBefore(cursor);
+  }catch(e){onNotify(e instanceof Error?e.message:'流水查询失败');}
+  finally{setBusy(false);}
+ }
+ useEffect(()=>{void load();},[]);
+ const credits=items.reduce((total,item)=>total+item.delta,0);
+ return <><Head tag="FINANCE / CREDIT LEDGER" title={t('adminLedger')} body="按工作区、时间、来源和业务 ID 查询积分流水。支付金额记录在订单模块；此处追踪积分入账、扣费及退回。"/>
+ <section className="panel portal-card">
+  <div className="portal-card-heading"><BookOpen size={19}/><h2>{t('adminFilters')}</h2>
+   <button className="btn btn-ghost" disabled={!items.length} onClick={()=>csvDownload('autojuben-ledger-page.csv',['ID','Workspace','Delta','Source','Source ID','Date'],items.map(x=>[x.id,x.orgName,x.delta,x.sourceType,x.sourceId,x.createdAt]))}><Download size={16}/>{t('adminCsv')}</button>
+  </div>
+  <form className="admin-filter-bar" onSubmit={e=>{e.preventDefault();setStack([]);void load('');}}>
+   <label>{t('adminWorkspace')}<input value={orgId} onChange={e=>setOrgId(e.target.value)} placeholder="Org UUID / All"/></label>
+   <label>{t('adminSource')}<input value={source} onChange={e=>setSource(e.target.value)} placeholder="Source type"/></label>
+   <label>{t('adminSearch')}<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Source ID"/></label>
+   <label>{t('adminFrom')}<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <label>{t('adminTo')}<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+   <button type="submit" className="btn btn-primary" disabled={busy}><Search size={15}/>{t('adminReload')}</button>
+  </form>
+  <div className="admin-ledger-summary"><span>{t('adminShowing')}: <b>{items.length}</b></span><span>{t('adminChange')} (page): <b className={credits<0?'admin-negative':'admin-positive'}>{credits>0?'+':''}{credits}</b></span><span>Cursor: {before||'latest'}</span></div>
+  <div className="portal-scroll"><table className="portal-table"><thead><tr><th>ID</th><th>{t('adminWorkspace')}</th><th>{t('adminChange')}</th><th>{t('adminSource')}</th><th>Source ID</th><th>{t('created')}</th></tr></thead>
+   <tbody>{items.map(x=><tr key={x.id}><td className="portal-mono">{x.id}</td><td>{x.orgName}<small>{x.orgId.slice(0,8)}</small></td><td><b className={x.delta<0?'admin-negative':'admin-positive'}>{x.delta>0?'+':''}{x.delta}</b></td><td>{x.sourceType}</td><td className="portal-mono">{x.sourceId}</td><td>{formatDate(x.createdAt)}</td></tr>)}</tbody>
+  </table></div>
+  {!items.length&&<p className="portal-empty">{t('adminNoRecords')}</p>}
+  <div className="admin-pager"><button className="btn btn-ghost" disabled={busy||!stack.length} onClick={()=>{const prev=stack[stack.length-1];setStack(x=>x.slice(0,-1));void load(prev);}}><ArrowLeft size={15}/>{t('adminPrev')}</button><span>{t('adminShowing')} {items.length} / page</span><button className="btn btn-ghost" disabled={busy||items.length<50} onClick={()=>{setStack(s=>[...s,before]);void load(items[items.length-1].id);}}>{t('adminNext')}<ArrowRight size={15}/></button></div>
+ </section></>;
+}
+
 export function AdminPage({section,user,onNotify}:{section:Area;user:User;onNotify:(m:string,ok?:boolean)=>void}){
  if(section==='adminUsers')return <AdminUsers current={user} onNotify={onNotify}/>;
  if(section==='adminStaff')return <StaffPage onNotify={onNotify}/>;
+ if(section==='adminLedger')return <LedgerPage onNotify={onNotify}/>;
  if(section==='adminOrders')return <AdminOrders onNotify={onNotify}/>;
  if(section==='adminPayments')return <GatewayPage onNotify={onNotify}/>;
  return <><ApiPage onNotify={onNotify}/><ApiMetricsPanel/></>;
