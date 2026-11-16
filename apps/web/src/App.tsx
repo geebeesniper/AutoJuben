@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog,MessageSquareText,BookOpen,ScanSearch,ShieldCheck } from 'lucide-react';
+import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,BookOpenCheck,LifeBuoy,UsersRound,Landmark,CloudCog,MessageSquareText,BookOpen,ScanSearch,ShieldCheck } from 'lucide-react';
 import { AuthPage } from './pages/Auth';
 import {DemoPreview} from './pages/DemoPreview';
 import {VideoCreationPreview} from './pages/VideoCreationPreview';
@@ -16,7 +16,7 @@ import { JobTable } from './components/JobTable';
 import { Status } from './components/Status';
 import { authRequest,formatDate,getWork,gql,type AppData,type Org,type User,type VideoJob } from './lib/api';
 import './pages/portal.css';
-type Screen='overview'|'studio'|'projects'|'jobs'|'team'|'settings'|'launcher'|'account'|'history'|'billing'|'purchases'|'shop'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
+type Screen='overview'|'studio'|'projects'|'jobs'|'team'|'settings'|'launcher'|'account'|'history'|'billing'|'purchases'|'shop'|'helpCenter'|'helpDesk'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
 type Section='workspace'|'customer'|'manage'|'platform';
 const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'overview',label:'概览面板',icon:<LayoutDashboard size={19}/>,section:'workspace'},
@@ -28,6 +28,8 @@ const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'purchases',label:'购买记录',icon:<Receipt size={19}/>,section:'customer'},
   {id:'history',label:'历史活动',icon:<History size={19}/>,section:'customer'},
   {id:'account',label:'我的账户',icon:<UserRound size={19}/>,section:'customer'},
+  {id:'helpCenter',label:'帮助中心',icon:<BookOpenCheck size={19}/>,section:'customer'},
+  {id:'helpDesk',label:'联系客服',icon:<LifeBuoy size={19}/>,section:'customer'},
   {id:'launcher',label:'运行与部署',icon:<ServerCog size={19}/>,section:'manage'},
   {id:'team',label:'团队成员',icon:<Users size={19}/>,section:'manage'},
   {id:'settings',label:'工作区 API',icon:<Settings size={19}/>,section:'manage'},
@@ -40,7 +42,7 @@ const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'adminPayments',label:'支付网关',icon:<Landmark size={19}/>,section:'platform'},
   {id:'adminApi',label:'平台 API 设置',icon:<CloudCog size={19}/>,section:'platform'}
 ];
-const portalScreens=['account','history','billing','purchases','shop'] as const;
+const portalScreens=['account','history','billing','purchases','shop','helpCenter','helpDesk'] as const;
 const adminScreens=['adminUsers','adminStaff','adminLedger','adminInvestigations','adminInbox','adminOrders','adminPayments','adminApi'] as const;
 const adminScreenCapability:Partial<Record<Screen,string>>={adminUsers:'users',adminStaff:'staff',adminLedger:'ledger',adminInvestigations:'investigation',adminInbox:'messaging',adminOrders:'billing',adminPayments:'billing',adminApi:'operations'};
 function initialPage():Screen {const tab=new URLSearchParams(window.location.search).get('tab') as Screen;
