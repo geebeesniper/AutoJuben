@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog,MessageSquareText,BookOpen,ScanSearch,ShieldUser } from 'lucide-react';
+import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog,MessageSquareText,BookOpen,ScanSearch,ShieldCheck } from 'lucide-react';
 import { AuthPage } from './pages/Auth';
 import {DemoPreview} from './pages/DemoPreview';
 import {VideoCreationPreview} from './pages/VideoCreationPreview';
@@ -32,7 +32,7 @@ const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'team',label:'团队成员',icon:<Users size={19}/>,section:'manage'},
   {id:'settings',label:'工作区 API',icon:<Settings size={19}/>,section:'manage'},
   {id:'adminUsers',label:'用户管理',icon:<UsersRound size={19}/>,section:'platform'},
-  {id:'adminStaff',label:'管理员团队',icon:<ShieldUser size={19}/>,section:'platform'},
+  {id:'adminStaff',label:'管理员团队',icon:<ShieldCheck size={19}/>,section:'platform'},
   {id:'adminLedger',label:'账目流水',icon:<BookOpen size={19}/>,section:'platform'},
   {id:'adminInvestigations',label:'大数据排查',icon:<ScanSearch size={19}/>,section:'platform'},
   {id:'adminInbox',label:'消息中心',icon:<MessageSquareText size={19}/>,section:'platform'},
