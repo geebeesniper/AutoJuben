@@ -16,9 +16,10 @@ import { JobTable } from './components/JobTable';
 import { Status } from './components/Status';
 import { authRequest,formatDate,getWork,gql,type AppData,type Org,type User,type VideoJob } from './lib/api';
 import './pages/portal.css';
-type Screen='overview'|'studio'|'projects'|'jobs'|'team'|'settings'|'launcher'|'account'|'history'|'billing'|'purchases'|'shop'|'helpCenter'|'helpDesk'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
+type Screen='adminOverview'|'overview'|'studio'|'projects'|'jobs'|'team'|'settings'|'launcher'|'account'|'history'|'billing'|'purchases'|'shop'|'helpCenter'|'helpDesk'|'adminUsers'|'adminOrders'|'adminPayments'|'adminApi'|'adminStaff'|'adminLedger'|'adminInvestigations'|'adminInbox';
 type Section='workspace'|'customer'|'manage'|'platform';
 const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
+  {id:'adminOverview',label:'运营总览',icon:<LayoutDashboard size={19}/>,section:'platform'},
   {id:'overview',label:'概览面板',icon:<LayoutDashboard size={19}/>,section:'workspace'},
   {id:'studio',label:'视频创作台',icon:<Sparkles size={19}/>,section:'workspace'},
   {id:'projects',label:'我的项目',icon:<FolderKanban size={19}/>,section:'workspace'},
@@ -43,10 +44,10 @@ const nav:{id:Screen;label:string;icon:React.ReactNode;section:Section}[]=[
   {id:'adminApi',label:'平台 API 设置',icon:<CloudCog size={19}/>,section:'platform'}
 ];
 const portalScreens=['account','history','billing','purchases','shop','helpCenter','helpDesk'] as const;
-const adminScreens=['adminUsers','adminStaff','adminLedger','adminInvestigations','adminInbox','adminOrders','adminPayments','adminApi'] as const;
-const adminScreenCapability:Partial<Record<Screen,string>>={adminUsers:'users',adminStaff:'staff',adminLedger:'ledger',adminInvestigations:'investigation',adminInbox:'messaging',adminOrders:'billing',adminPayments:'billing',adminApi:'operations'};
+const adminScreens=['adminOverview','adminUsers','adminStaff','adminLedger','adminInvestigations','adminInbox','adminOrders','adminPayments','adminApi'] as const;
+const adminScreenCapability:Partial<Record<Screen,string>>={adminOverview:'investigation',adminUsers:'users',adminStaff:'staff',adminLedger:'ledger',adminInvestigations:'investigation',adminInbox:'messaging',adminOrders:'billing',adminPayments:'billing',adminApi:'operations'};
 function initialPage():Screen {const tab=new URLSearchParams(window.location.search).get('tab') as Screen;
- return nav.some(x=>x.id===tab)?tab:window.location.pathname==='/admin'?'adminUsers':'overview';}
+ return nav.some(x=>x.id===tab)?tab:window.location.pathname==='/admin'?'adminOverview':'overview';}
 function JobDetails({j,org,onClose,onResolved,onNotify}:{j:VideoJob;org:Org;onClose:()=>void;onResolved:()=>void;onNotify:(s:string,ok?:boolean)=>void}){
   const [providerTaskId,setProviderTaskId]=useState('');
   const [busy,setBusy]=useState(false);
@@ -77,6 +78,14 @@ function MainApp() {
   useEffect(()=>{authRequest('me').then(r=>{setUser(r.user);setOrgs(r.organizations);setOrgId(r.organizations[0]?.id??'');if(r.user)void gql<{viewerCapabilities:{platformAdmin:boolean;adminCapabilities:string[]}}>('query{viewerCapabilities{platformAdmin adminCapabilities}}').then(x=>{setPlatformAdmin(x.viewerCapabilities.platformAdmin);setAdminCapabilities(x.viewerCapabilities.adminCapabilities);}).catch(()=>{setPlatformAdmin(false);setAdminCapabilities([]);});}).catch(()=>{}).finally(()=>setBooting(false));
     fetch('/healthz').then(r=>r.json()).then(r=>setDemo(r.mode==='demo')).catch(()=>{});
   },[]);
+  useEffect(()=>{
+    if(!user?.id)return;
+    const ping=()=>{if(document.visibilityState==='visible')void gql('mutation{recordMyPresence}').catch(()=>{});};
+    ping();
+    const interval=window.setInterval(ping,60000);
+    document.addEventListener('visibilitychange',ping);
+    return ()=>{window.clearInterval(interval);document.removeEventListener('visibilitychange',ping);};
+  },[user?.id]);
   async function refresh(silent=false){if(!orgId)return;if(!silent)setLoading(true);try{const fresh=await getWork(orgId);setData(fresh);setError('');}catch(e){if(!silent)setError(e instanceof Error?e.message:'读取失败');}finally{if(!silent)setLoading(false);}}
   useEffect(()=>{if(!user||!orgId)return;setData(null);void refresh();const timer=setInterval(()=>{if(!document.hidden)void refresh(true);},8_000);return()=>clearInterval(timer);},[user?.id,orgId]);
   function onAuth(u:User,list:Org[]){setUser(u);setOrgs(list);setOrgId(list[0]?.id??'');setPage(initialPage());void gql<{viewerCapabilities:{platformAdmin:boolean}}>('query{viewerCapabilities{platformAdmin}}').then(x=>setPlatformAdmin(x.viewerCapabilities.platformAdmin)).catch(()=>{});}
