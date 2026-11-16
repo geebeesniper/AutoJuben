@@ -57,12 +57,18 @@ CREATE TABLE IF NOT EXISTS public.help_articles (
 CREATE INDEX IF NOT EXISTS platform_admin_audit_actor_time_idx ON public.platform_admin_audit(actor_id,created_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS platform_admin_audit_target_time_idx ON public.platform_admin_audit(target_type,target_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS purchase_orders_created_cursor_idx ON public.purchase_orders(created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS purchase_orders_paid_time_idx ON public.purchase_orders(paid_at DESC) WHERE paid_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS video_jobs_failure_time_idx ON public.video_jobs(finished_at DESC,updated_at DESC) WHERE status='failed';
+CREATE INDEX IF NOT EXISTS platform_message_threads_urgent_idx ON public.platform_message_threads(created_at DESC) WHERE channel='customer' AND priority IN ('urgent','high');
+CREATE INDEX IF NOT EXISTS api_request_metrics_error_time_idx ON public.api_request_metrics(occurred_at DESC) WHERE http_status>=500 OR graphql_errors>0;
 CREATE INDEX IF NOT EXISTS purchase_orders_org_status_date_idx ON public.purchase_orders(org_id,status,created_at DESC);
 CREATE INDEX IF NOT EXISTS video_jobs_user_time_idx ON public.video_jobs(created_by,created_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS credit_ledger_source_lookup_idx ON public.credit_ledger(source_type,source_id);
 CREATE INDEX IF NOT EXISTS audit_logs_actor_date_idx ON public.audit_logs(actor_id,created_at DESC,id DESC);
 
 ALTER TABLE public.help_articles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_presence_samples ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.platform_presence_samples FROM anon, authenticated;
 ALTER TABLE public.platform_admin_staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_message_threads ENABLE ROW LEVEL SECURITY;
@@ -86,6 +92,16 @@ INSERT INTO public.help_articles(slug,category,title_zh,title_en,title_es,body_z
 ('account-help','account','账户登录遇到问题怎么办？','I cannot sign in. What should I do?','No puedo iniciar sesión. ¿Qué hago?','先尝试登录页的找回密码流程。如仍然失败，请在 Help Desk 选择 Account。切勿发送密码或 API 密钥。','Try password recovery from the sign-in page. If it still fails, choose Account in Help Desk. Never send passwords or API keys.','Usa la recuperación de contraseña. Si falla, elige Cuenta en Help Desk. Nunca envíes contraseñas ni claves API.',true,10),
 ('api-integration','api','在哪里找到 API 接口？','Where are API endpoints?','¿Dónde están los endpoints de API?','工作区管理员可在 Settings 查看 GraphQL、REST、JSON 接口示例；上游视频 API 的路径是另一套独立配置。','Workspace admins can find GraphQL, REST and JSON examples in Settings. Upstream video API routes are configured separately.','Los administradores encuentran ejemplos GraphQL, REST y JSON en Ajustes. Las rutas del proveedor se configuran aparte.',true,10)
 ON CONFLICT(slug) DO NOTHING;
+
+-- Presence sampling for historical online and peak-user line charts.
+-- Each authenticated user contributes at most one record per five-minute UTC interval.
+-- Server-only writes. A valid session must be checked by the Portal service.
+CREATE TABLE IF NOT EXISTS public.platform_presence_samples (
+ user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+ sample_at TIMESTAMPTZ NOT NULL,
+ PRIMARY KEY(user_id,sample_at)
+);
+CREATE INDEX IF NOT EXISTS platform_presence_samples_time_idx ON public.platform_presence_samples(sample_at DESC);
 
 CREATE TABLE IF NOT EXISTS public.platform_admin_audit (
  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
