@@ -8,7 +8,7 @@ type AdminUser={id:string;name:string;email:string;disabled:boolean;orgCount:num
 type InvestigationEvent={eventType:string;eventId:string;orgId:string|null;orgName:string|null;userId:string|null;userEmail:string|null;createdAt:string;status:string;summary:string};
 type StaffMember={userId:string;name:string;email:string;role:string;active:boolean;updatedAt:string};
 type LedgerEntry={id:string;orgId:string;orgName:string;delta:number;sourceType:string;sourceId:string;createdAt:string};
-type InboxThread={id:string;subject:string;category:string;status:string;priority:string;customerId:string|null;customerEmail:string|null;assignedAdminId:string|null;assignedAdmin:string|null;createdAt:string;updatedAt:string;messageCount:number};
+type InboxThread={id:string;subject:string;channel:'internal'|'customer';category:string;status:string;priority:string;customerId:string|null;customerEmail:string|null;assignedAdminId:string|null;assignedAdmin:string|null;createdAt:string;updatedAt:string;messageCount:number};
 type InboxMessage={id:string;threadId:string;senderId:string;senderName:string;senderEmail:string;content:string;internal:boolean;createdAt:string};
 type RoleInfo={role:string;capabilities:string[]};
 type Order={id:string;userName:string;email:string;orgId:string;orgName:string;productName:string;credits:number;amountCents:number;currency:string;status:string;refundedAmountCents:number;refundedCredits:number;stripeSessionId:string|null;createdAt:string;paidAt:string|null};
@@ -208,11 +208,11 @@ function InvestigationsPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
 function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
  const {t}=useI18n();
  const [threads,setThreads]=useState<InboxThread[]>([]),[selected,setSelected]=useState<InboxThread|null>(null),[messages,setMessages]=useState<InboxMessage[]>([]);
- const [search,setSearch]=useState(''),[status,setStatus]=useState(''),[category,setCategory]=useState(''),[busy,setBusy]=useState(false);
+ const [search,setSearch]=useState(''),[status,setStatus]=useState(''),[category,setCategory]=useState(''),[channel,setChannel]=useState<'internal'|'customer'>('internal'),[busy,setBusy]=useState(false);
  const [draft,setDraft]=useState(''),[subject,setSubject]=useState(''),[customerId,setCustomerId]=useState(''),[priority,setPriority]=useState('normal'),[adding,setAdding]=useState(false);
  async function load(){
   setBusy(true);
-  try{const r=await gql<{adminInbox:InboxThread[]}>('query($search:String!,$status:String!,$category:String!){adminInbox(search:$search,status:$status,category:$category,limit:80){id subject category status priority customerId customerEmail assignedAdminId assignedAdmin createdAt updatedAt messageCount}}',{search,status,category});
+  try{const r=await gql<{adminInbox:InboxThread[]}>('query($search:String!,$status:String!,$category:String!,$channel:String!){adminInbox(search:$search,status:$status,category:$category,channel:$channel,limit:80){id channel subject category status priority customerId customerEmail assignedAdminId assignedAdmin createdAt updatedAt messageCount}}',{search,status,category,channel});
    setThreads(r.adminInbox);
   }catch(e){onNotify(e instanceof Error?e.message:'站内消息读取失败');}finally{setBusy(false);}
  }
@@ -227,10 +227,10 @@ function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
   if(subject.trim().length<3)return;
   setBusy(true);
   try{
-   const r=await gql<{adminCreateThread:string}>('mutation($subject:String!,$category:String!,$priority:String!,$customerId:ID){adminCreateThread(subject:$subject,category:$category,priority:$priority,customerId:$customerId)}',
-   {subject:subject.trim(),category:category||'internal',priority,customerId:customerId||null});
+   const r=await gql<{adminCreateThread:string}>('mutation($subject:String!,$category:String!,$priority:String!,$customerId:ID,$channel:String!){adminCreateThread(subject:$subject,category:$category,priority:$priority,customerId:$customerId,channel:$channel)}',
+   {subject:subject.trim(),category:category||(channel==='internal'?'internal':'general'),priority,customerId:channel==='customer'?(customerId||null):null,channel});
    setSubject('');setAdding(false);onNotify('内部会话已创建',true);
-   const latest=await gql<{adminInbox:InboxThread[]}>('query{adminInbox(limit:80){id subject category status priority customerId customerEmail assignedAdminId assignedAdmin createdAt updatedAt messageCount}}');
+   const latest=await gql<{adminInbox:InboxThread[]}>('query($channel:String!){adminInbox(channel:$channel,limit:80){id channel subject category status priority customerId customerEmail assignedAdminId assignedAdmin createdAt updatedAt messageCount}}',{channel});
    setThreads(latest.adminInbox);const found=latest.adminInbox.find(x=>x.id===r.adminCreateThread);if(found)await open(found);
   }catch(e){onNotify(e instanceof Error?e.message:'创建失败');}finally{setBusy(false);}
  }
@@ -248,15 +248,16 @@ function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
    setSelected({...selected,status:next});await load();
   }catch(e){onNotify(e instanceof Error?e.message:'状态修改失败');}finally{setBusy(false);}
  }
- return <><Head tag="COLLABORATION / MESSENGER" title={t('adminInbox')} body="管理员间内部消息和工单协作，记录状态、优先级、负责人和历史消息。"/>
+ return <><Head tag="COLLABORATION / MESSENGER" title={t('adminInbox')} body={channel==='internal'?t('helpAdminInternal'):t('helpAdminCustomer')}/>
  <section className="panel portal-card">
-  <div className="portal-card-heading"><MessageSquareText size={20}/><h2>{t('adminMessageHistory')}</h2><button className="btn btn-primary" onClick={()=>setAdding(x=>!x)}><Plus size={15}/>{t('adminNewThread')}</button></div>
+  <div className="admin-messenger-channels"><button type="button" className={channel==='internal'?'selected':''} onClick={()=>{setChannel('internal');setSelected(null);setMessages([]);setCategory('');setAdding(false);setThreads([]);}}>{t('helpAdminInternal')}</button><button type="button" className={channel==='customer'?'selected':''} onClick={()=>{setChannel('customer');setSelected(null);setMessages([]);setCategory('');setAdding(false);setThreads([]);}}>{t('helpAdminCustomer')}</button></div>
+  <div className="portal-card-heading"><MessageSquareText size={20}/><h2>{channel==='internal'?t('helpAdminInternal'):t('helpAdminCustomer')}</h2><button className="btn btn-primary" onClick={()=>setAdding(x=>!x)}><Plus size={15}/>{t('adminNewThread')}</button></div>
   {adding&&<div className="admin-filter-bar">
    <label>{t('adminSubject')}<input value={subject} maxLength={200} onChange={e=>setSubject(e.target.value)}/></label>
-   <label>{t('adminCategory')}<select value={category||'internal'} onChange={e=>setCategory(e.target.value)}>{['internal','support','billing','technical','compliance'].map(x=><option key={x}>{x}</option>)}</select></label>
+   <label>{t('adminCategory')}<select value={category||(channel==='internal'?'internal':'general')} onChange={e=>setCategory(e.target.value)}>{(channel==='internal'?['internal','support','billing','technical','compliance']:['general','generation','technical','billing','account']).map(x=><option key={x}>{x}</option>)}</select></label>
    <label>{t('adminPriority')}<select value={priority} onChange={e=>setPriority(e.target.value)}>{['low','normal','high','urgent'].map(x=><option key={x}>{x}</option>)}</select></label>
-   <label>Customer UUID (optional)<input value={customerId} onChange={e=>setCustomerId(e.target.value)} placeholder="Existing user UUID"/></label>
-   <button className="btn btn-primary" disabled={busy||subject.trim().length<3} onClick={()=>void create()}>{t('adminCreate')}</button>
+   {channel==='customer'&&<label>Customer UUID<input value={customerId} onChange={e=>setCustomerId(e.target.value)} placeholder="Existing user UUID"/></label>}
+   <button className="btn btn-primary" disabled={busy||subject.trim().length<3||(channel==='customer'&&!customerId.trim())} onClick={()=>void create()}>{t('adminCreate')}</button>
   </div>}
   <form className="admin-filter-bar" onSubmit={e=>{e.preventDefault();void load();}}>
    <label>{t('adminSearch')}<input value={search} onChange={e=>setSearch(e.target.value)}/></label>
@@ -276,7 +277,7 @@ function InboxPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
     <button className="btn btn-primary" disabled={busy||!draft.trim()||selected.status==='closed'} onClick={()=>void send()}><Send size={16}/>{t('adminReply')}</button></div></>
    :<p className="portal-empty">{t('adminNoSelection')}</p>}
   </div></div>
-  <p className="portal-help"><ShieldCheck size={14}/> {t('adminInternalOnly')}</p>
+  <p className="portal-help"><ShieldCheck size={14}/> {channel==='internal'?t('adminInternalOnly'):t('helpAdminCustomer')}</p>
  </section></>;
 }
 
