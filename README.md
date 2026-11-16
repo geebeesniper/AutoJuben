@@ -14,6 +14,31 @@
 - **Quality targets:** [`quality/QUALITY_TARGETS.md`](quality/QUALITY_TARGETS.md)
 - **Original EXE reconstruction limits:** [`docs/exe-reconstruction-and-parity.md`](docs/exe-reconstruction-and-parity.md)
 
+## Enterprise Administration — multi-admin RBAC, finance, investigations and messaging
+
+**Source requirements:** existing `docs/cmm-quality-manual.md`, `docs/api-protocols.md`, `sql/004_customer_portal_payments.sql`, `sql/005_api_quality.sql`, and operator-requested admin capabilities. The existing `Admin.tsx`, `admin.service.ts`, `admin.repository.ts`, controller and GraphQL schema are the **single implementation owners**; no second production admin backend or appended override patch.
+
+- **Admin roles and least privilege:** the immutable root identity comes from Vercel `PLATFORM_ADMIN_EMAILS` (`super_admin`). Postgres `platform_admin_staff` stores `operations_manager`, `finance_manager`, `support_lead`, `analyst`, `auditor` with independent active flags. Staff cannot grant `super_admin` to themselves. Operations managers can assign lower scoped roles only, never finance/operations/root. Each protected resolver checks the role **server-side**. The UI only mirrors these capabilities; hiding navigation is never the access control.
+- **User 360 investigations:** search by email/name/ID and inspect server-derived, time-scoped activity across video jobs, order transactions, workspace audit, and related API events. Search only returns bounded paged results; never include full prompts, card data, private tokens, raw request bodies or password hashes.
+- **Finance:** preserve original `purchase_orders` / Stripe source of truth and `credit_ledger` accounting with idempotent `source_type,source_id`. New administrator ledger is read-only, filters workspace, source, source ID and date, and paginates by monotonically increasing ledger ID. The CSV action exports only the retrieved page with spreadsheet-formula escaping. It does not alter balances or issue refunds.
+- **Large-volume diagnostics:** `adminInvestigations` provides category, workspace, actor, date-window and string filters, and deterministic bounded cursor pagination over video, orders, API request metrics, workspace audit and platform admin audit. Exports are per retrieved page. Use indexed timestamps and IDs and constrain investigations to a 366-day maximum per request.
+- **Internal Messenger:** `platform_message_threads` and `platform_messages` persist internal administrator threads with category, priority, status, optional linked customer, assigned administrator, sender and message history. This is **not yet a customer-facing two-way chat**; all messages are marked internal and restricted to appropriately authorized staff.
+- **CMM audit:** `platform_admin_audit` records staff authorization changes, thread creation, message sends and resolution changes, without recording message content or credentials.
+- **Preview:** `/preview/backend` presents an interactive **fictional sample dataset** including role switching, filters, record drill-down, ledger export and inbox actions; preview changes are browser-local, not saved to production and are explicitly labelled. The authenticated `/admin` route is separate and uses real role-checked GraphQL services when the database is available.
+
+**Role matrix:**
+
+| Role | Staff | Users | Ledger | Orders/billing | Investigations | Internal messages | Platform secrets |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Super Admin (env-only) | Full | Full | Read | Full | Read | Full | Full |
+| Operations Manager | Scoped delegation | Manage | Read | No | Read | Full | No |
+| Finance Manager | No | No | Read | Manage | Read | Full | No |
+| Support Lead | No | Manage | No | No | Read | Full | No |
+| Analyst | No | No | No | No | Read | No | No |
+| Auditor | No | No | Read | No | Read | No | No |
+
+**Implementation/deployment state:** on `candidate/v0.6.0`; versioned schema `sql/008_enterprise_admin.sql` is committed but **not applied** because Supabase project is not provisioned. No real staff accounts, messages, financial queries or login credentials are active. Do not interpret successful TypeScript, CI or Vercel preview as successful backend integration. Apply 008 after verified earlier migrations, test two non-admin tenants, all role-denied paths, message access, ledger reconciliation and indexed cursor integrity before permitting production use. The existing Core/Kernel/protected files are not intentionally altered.
+
 ## GS-One / seedancecreat feature parity (source-backed migration)
 
 **Legacy source:** [geebeesniper/seedancecreat](https://github.com/geebeesniper/seedancecreat) (GS-One SaaS; last observed source uses TypeScript business services, original Vue frontend and Wails method bridge). This migration is **feature parity, not a wholesale code/DOM copy**. The existing AutoJuben MVC ownership, protected core and three API transports remain authoritative.
