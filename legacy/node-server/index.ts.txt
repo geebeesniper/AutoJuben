@@ -1,0 +1,78 @@
+import { createServer } from 'node:http';
+import { createYoga,maskError } from 'graphql-yoga';
+import { GraphQLError } from 'graphql';
+import { readFile,stat } from 'node:fs/promises';
+import { extname,resolve,sep } from 'node:path';
+import { config } from './config.js';
+import { pool } from './db/pool.js';
+import { guardWrite, authRoute, getCurrentUser } from './auth/sessions.js';
+import { schema } from './graphql/schema.js';
+import { startWorker } from './worker/runner.js';
+import { AppError } from './utils/errors.js';
+import { assetRoute,uploadRoute } from './utils/uploads.js';
+import { serveVideo } from './utils/video.js';
+import {launcherDownload} from './launcher/diagnostics.js';
+if(config.production && !config.origin.startsWith('https:') && !config.origin.startsWith('http://localhost'))
+  console.warn('[security] Production PUBLIC_ORIGIN should be HTTPS.');
+if(config.production && !config.mockProvider && config.providerUrl.startsWith('http:'))
+  console.warn('[security] Video API uses plain HTTP: X-License-Key is not encrypted on the wire.');
+const yoga=createYoga({
+  schema,graphqlEndpoint:'/graphql',graphiql:!config.production,
+  context:async ({request})=>({user:await getCurrentUser(request.headers.get('cookie')??undefined)}),
+  maskedErrors:{isDev:false,maskError(error,message,isDev){
+    const original=error instanceof GraphQLError?error.originalError:error;
+    if(original instanceof AppError)return new GraphQLError(original.message,{extensions:{code:original.code}});
+    return maskError(error,message,isDev);
+  }}
+});
+const contentTypes:Record<string,string>={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.woff2':'font/woff2'};
+const server=createServer(async (req,res)=>{
+  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','DENY');
+  res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
+  try {
+    const url=new URL(req.url??'/',`http://localhost:${config.port}`);
+    const pathname=url.pathname;
+    if(pathname==='/healthz') {
+      await pool.query('SELECT 1');res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,service:'autojuben-saas',mode:config.mockProvider?'demo':'live'}));return;
+    }
+    if(pathname.startsWith('/auth/')){await authRoute(req,res,pathname);return;}
+    if(pathname==='/api/launcher/diagnostics'||/^\/api\/launcher\/backups\/[0-9a-f-]{36}\/manifest$/i.test(pathname)){
+      await launcherDownload(req,res,url,await getCurrentUser(req.headers.cookie));return;
+    }
+    if(pathname==='/api/uploads'){
+      if(req.method!=='POST')throw new AppError(405,'方法不允许');
+      guardWrite(req);
+      await uploadRoute(req,res,await getCurrentUser(req.headers.cookie));return;
+    }
+    if(pathname.startsWith('/api/assets/')){
+      if(req.method!=='GET')throw new AppError(405,'方法不允许');
+      await assetRoute(res,await getCurrentUser(req.headers.cookie),pathname.split('/').at(-1)!);return;
+    }
+    if(/^\/api\/jobs\/[0-9a-f-]{36}\/video$/i.test(pathname)){
+      if(req.method!=='GET' && req.method!=='HEAD')throw new AppError(405,'方法不允许');
+      await serveVideo(req,res,await getCurrentUser(req.headers.cookie),pathname.split('/')[3]);return;
+    }
+    if(pathname==='/graphql') {
+      if(req.method==='POST')guardWrite(req);
+      await yoga(req,res);return;
+    }
+    if(req.method!=='GET' && req.method!=='HEAD')throw new AppError(405,'方法不允许');
+    const path=pathname==='/'?'/index.html':pathname;
+    let filename=resolve(config.webDist,`.${path}`);
+    if(!filename.startsWith(config.webDist+sep) && filename!==config.webDist)throw new AppError(403,'路径无效');
+    let blob:Buffer;
+    try {const info=await stat(filename);if(!info.isFile())throw new Error('not file');blob=await readFile(filename);}
+    catch {filename=resolve(config.webDist,'index.html');blob=await readFile(filename);}
+    const ext=extname(filename);
+    res.writeHead(200,{'Content-Type':contentTypes[ext]??'application/octet-stream','Cache-Control':ext==='.html'?'no-cache':'public, max-age=3600'});
+    if(req.method==='HEAD')res.end();else res.end(blob);
+  }catch(error) {
+    const status=error instanceof AppError?error.status:500;
+    if(status>=500)console.error('[http]',error);
+    if(!res.headersSent){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:error instanceof AppError?error.message:'服务器内部错误'}));}
+  }
+});
+const stopWorker=startWorker();
+server.listen(config.port,'0.0.0.0',()=>console.info(`AutoJuben SaaS at http://localhost:${config.port} (mock=${config.mockProvider})`));
+async function shutdown(){stopWorker();server.close();await pool.end();process.exit(0);}
+process.on('SIGTERM',()=>{void shutdown();});process.on('SIGINT',()=>{void shutdown();});

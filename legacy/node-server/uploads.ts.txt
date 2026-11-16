@@ -1,0 +1,91 @@
+import Busboy from 'busboy';
+import type { IncomingMessage,ServerResponse } from 'node:http';
+import { createReadStream,createWriteStream } from 'node:fs';
+import { mkdir,open,stat,unlink } from 'node:fs/promises';
+import { extname,join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { randomUUID } from 'node:crypto';
+import { config } from '../config.js';
+import { query } from '../db/pool.js';
+import { requireMembership,type User } from '../auth/sessions.js';
+import { AppError,assert } from './errors.js';
+const types:Record<string,{kind:'image'|'audio'|'video';mime:string}>={
+  '.jpg':{kind:'image',mime:'image/jpeg'},'.jpeg':{kind:'image',mime:'image/jpeg'},'.png':{kind:'image',mime:'image/png'},
+  '.webp':{kind:'image',mime:'image/webp'},'.mp3':{kind:'audio',mime:'audio/mpeg'},'.wav':{kind:'audio',mime:'audio/wav'},
+  '.m4a':{kind:'audio',mime:'audio/mp4'},'.mp4':{kind:'video',mime:'video/mp4'},'.mov':{kind:'video',mime:'video/quicktime'},
+  '.webm':{kind:'video',mime:'video/webm'}
+};
+function signatureOk(bytes:Buffer,ext:string):boolean {
+  if(ext==='.jpg'||ext==='.jpeg')return bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
+  if(ext==='.png')return bytes.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'));
+  if(ext==='.webp')return bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP';
+  if(ext==='.wav')return bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WAVE';
+  if(ext==='.webm')return bytes.subarray(0,4).equals(Buffer.from('1a45dfa3','hex'));
+  if(ext==='.mp4'||ext==='.m4a'||ext==='.mov')return bytes.toString('ascii',4,8)==='ftyp';
+  if(ext==='.mp3')return bytes.toString('ascii',0,3)==='ID3'||(bytes[0]===0xff&&(bytes[1]&0xe0)===0xe0);
+  return false;
+}
+function send(res:ServerResponse,status:number,body:unknown){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(body));}
+export async function uploadRoute(req:IncomingMessage,res:ServerResponse,user:User|null) {
+  const state:{filePath:string; info:{filename:string;mime:string;ext:string;kind:'image'|'audio'|'video'}|null; rejected:Error|null; transfer:Promise<void>|null} = {filePath:'',info:null,rejected:null,transfer:null};
+  try {
+    assert(user,'请登录后上传',401);
+    const orgId=String(req.headers['x-org-id']??'');
+    await requireMembership(user,orgId,['owner','admin','editor']);
+    if(!req.headers['content-type']?.startsWith('multipart/form-data'))throw new AppError(400,'必须使用 multipart/form-data');
+    const max=config.maxUploadBytes;
+    if(Number(req.headers['content-length']??0)>max+100_000)throw new AppError(413,'文件太大');
+    await mkdir(config.uploadDir,{recursive:true,mode:0o700});
+    const bb=Busboy({headers:req.headers,limits:{files:1,fields:0,parts:1,fileSize:max}});
+    let selected=false;
+    const id=randomUUID();
+    await new Promise<void>((resolve,reject)=>{
+      bb.on('file',(field,stream,meta)=>{
+        if(selected||field!=='file'){state.rejected=new AppError(400,'只接受一个名为 file 的文件');stream.resume();return;}
+        selected=true;
+        const ext=extname(meta.filename??'').toLowerCase();const t=types[ext];
+        if(!t || !meta.mimeType.startsWith(`${t.kind}/`) && !(t.kind==='audio'&&meta.mimeType==='application/octet-stream')) {
+          state.rejected=new AppError(415,'仅支持 JPG/PNG/WebP、MP3/WAV/M4A、MP4/MOV/WebM');stream.resume();return;
+        }
+        state.info={filename:String(meta.filename).replace(/[/\\\x00-\x1f]/g,'').slice(0,180)||`asset${ext}`,mime:t.mime,ext,kind:t.kind};
+        state.filePath=join(config.uploadDir,`${id}${ext}`);
+        stream.on('limit',()=>{state.rejected=new AppError(413,`文件不能超过 ${Math.floor(max/1024/1024)} MB`);});
+        state.transfer=pipeline(stream,createWriteStream(state.filePath,{flags:'wx',mode:0o600}));
+      });
+      bb.on('error',reject);bb.on('close',resolve);
+      req.on('error',reject);
+      req.pipe(bb);
+    });
+    if(state.transfer)await state.transfer;
+    if(state.rejected)throw state.rejected;
+    if(!state.filePath||!state.info)throw new AppError(400,'缺少上传文件');
+    const realPath=state.filePath;
+    const fileInfo=state.info;
+    const metadata=await stat(realPath);
+    assert(metadata.size>0&&metadata.size<=max,'文件为空或过大');
+    const file=await open(realPath,'r');
+    const header=Buffer.alloc(32);
+    try { await file.read(header,0,32,0); } finally { await file.close(); }
+    assert(signatureOk(header,fileInfo.ext),'文件内容与扩展名不匹配');
+    await query(`INSERT INTO uploaded_assets(id,org_id,uploaded_by,kind,file_path,original_name,content_type,bytes)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,orgId,user.id,fileInfo.kind,realPath,fileInfo.filename,fileInfo.mime,metadata.size]);
+    send(res,201,{id,kind:fileInfo.kind,name:fileInfo.filename,bytes:metadata.size});
+  } catch(error) {
+    if(state.filePath)await unlink(state.filePath).catch(()=>{});
+    const status=error instanceof AppError?error.status:500;
+    if(status>=500) console.error('[upload]',error);
+    if(!res.headersSent)send(res,status,{error:error instanceof AppError?error.message:'上传失败'});
+  }
+}
+export async function assetRoute(res:ServerResponse,user:User|null,id:string) {
+  try {
+    assert(user,'请先登录',401);
+    const r=await query<{file_path:string;content_type:string;original_name:string}>(`SELECT a.file_path,a.content_type,a.original_name FROM uploaded_assets a
+      INNER JOIN memberships m ON m.org_id=a.org_id WHERE a.id=$1 AND m.user_id=$2`,[id,user.id]);
+    assert(r.rows[0],'素材不存在或无权访问',404);
+    const item=r.rows[0];const f=await stat(item.file_path);
+    res.writeHead(200,{'Content-Type':item.content_type,'Content-Length':f.size,'Cache-Control':'private, max-age=60',
+      'X-Content-Type-Options':'nosniff','Content-Disposition':`inline; filename="asset${extname(item.file_path)}"`});
+    createReadStream(item.file_path).pipe(res);
+  }catch(error){const status=error instanceof AppError?error.status:500;if(!res.headersSent)send(res,status,{error:error instanceof AppError?error.message:'素材读取失败'});}
+}

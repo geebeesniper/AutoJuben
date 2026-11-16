@@ -1,0 +1,40 @@
+import type {IncomingMessage,ServerResponse} from 'node:http';
+import {randomUUID} from 'node:crypto';
+import {query} from '../db/pool.js';
+import {requireMembership,type User} from '../auth/sessions.js';
+import {assert} from '../utils/errors.js';
+import {config} from '../config.js';
+import {inspectRuntime} from './runtime.js';
+import {backupManifestForDownload} from './backups.js';
+
+function asDownload(res:ServerResponse,name:string,value:Buffer) {
+  res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="${name}"`,
+    'Cache-Control':'no-store','Content-Length':value.length,'X-Content-Type-Options':'nosniff'});
+  res.end(value);
+}
+export async function launcherDownload(req:IncomingMessage,res:ServerResponse,url:URL,user:User|null) {
+  assert(req.method==='GET','方法不允许',405);
+  const orgId=url.searchParams.get('orgId')??'';
+  await requireMembership(user,orgId,['owner','admin']);
+  if(url.pathname==='/api/launcher/diagnostics') {
+    const [runtime,events,counts,latest]=await Promise.all([
+      inspectRuntime(orgId),
+      query(`SELECT e.category,e.action,e.status,e.detail,e.created_at FROM launcher_events e
+        WHERE e.org_id=$1 ORDER BY e.created_at DESC LIMIT 150`,[orgId]),
+      query(`SELECT (SELECT COUNT(*)::integer FROM projects WHERE org_id=$1) AS projects,
+        (SELECT COUNT(*)::integer FROM video_jobs WHERE org_id=$1) AS jobs,
+        (SELECT COUNT(*)::integer FROM uploaded_assets WHERE org_id=$1) AS assets`,[orgId]),
+      query(`SELECT version,channel,created_at FROM launcher_releases WHERE org_id=$1 ORDER BY created_at DESC LIMIT 20`,[orgId])
+    ]);
+    const bundle={type:'autojuben-saas-diagnostics',schema:1,referenceId:randomUUID(),createdAt:new Date().toISOString(),
+      orgId,runtime,app:{version:'0.2.0',mode:config.mockProvider?'mock':'live',dockerControl:config.dockerControlEnabled,
+      deployHookConfigured:Boolean(config.deployWebhookUrl),database:'reachable'},counts:counts.rows[0],
+      releases:latest.rows,events:events.rows};
+    const buf=Buffer.from(JSON.stringify(bundle,null,2),'utf8');
+    asDownload(res,`autojuben-diagnostics-${Date.now()}.json`,buf);return;
+  }
+  const match=/^\/api\/launcher\/backups\/([0-9a-f-]{36})\/manifest$/i.exec(url.pathname);
+  assert(match,'下载地址不存在',404);
+  const buf=await backupManifestForDownload(orgId,match[1]);
+  asDownload(res,`autojuben-backup-${match[1]}-metadata.json`,buf);
+}

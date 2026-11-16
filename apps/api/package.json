@@ -1,0 +1,26 @@
+{
+  "name": "@autojuben/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"Use npx vercel dev from repository root\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "graphql": "^16.11.0",
+    "graphql-yoga": "^6.0.1",
+    "pg": "^8.13.3",
+    "@supabase/supabase-js": "^2.76.0",
+    "stripe": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,35 @@
+import type { IncomingMessage,ServerResponse } from 'node:http';
+import { Readable } from 'node:stream';
+import { config } from '../config.js';
+import { query } from '../db/pool.js';
+import { providerKey } from '../provider/client.js';
+import { type User } from '../auth/sessions.js';
+import { AppError,assert } from './errors.js';
+export async function serveVideo(req:IncomingMessage,res:ServerResponse,user:User|null,id:string) {
+  try {
+    assert(user,'请登录后下载视频',401);
+    assert(/^[0-9a-f-]{36}$/i.test(id),'视频任务 ID 无效',400);
+    const found=await query<{org_id:string;video_url:string|null}>(`SELECT j.org_id,j.video_url FROM video_jobs j
+      JOIN memberships m ON j.org_id=m.org_id WHERE j.id=$1 AND m.user_id=$2 AND j.status='success'`,[id,user.id]);
+    const row=found.rows[0];assert(row?.video_url,'视频尚未准备好',404);
+    const url=new URL(row.video_url,config.providerUrl);
+    assert(['http:','https:'].includes(url.protocol),'视频 URL 无效');
+    // Public CDN: let the browser download it directly. The customer never sees the license key.
+    if(url.origin!==new URL(config.providerUrl).origin) {
+      res.writeHead(302,{'Location':url.toString(),'Cache-Control':'private, no-store'});res.end();return;
+    }
+    // Provider's /api/video/* may require X-License-Key even on a redirect.
+    assert(url.pathname.startsWith('/api/video/')||url.pathname.startsWith('/api/task/'),'不支持的上游视频路径',502);
+    const key=await providerKey(row.org_id);
+    const headers:Record<string,string>={'X-License-Key':key};
+    if(typeof req.headers.range==='string')headers.Range=req.headers.range;
+    const upstream=await fetch(url.toString(),{headers,redirect:'follow',signal:AbortSignal.timeout(60_000)});
+    assert(upstream.ok && upstream.body,'视频暂不可下载',502);
+    const responseHeaders:Record<string,string>={'Content-Type':upstream.headers.get('content-type')??'video/mp4','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
+    for(const header of ['content-length','content-range','accept-ranges']){const v=upstream.headers.get(header);if(v)responseHeaders[header]=v;}
+    res.writeHead(upstream.status,responseHeaders);
+    Readable.fromWeb(upstream.body as any).pipe(res);
+  }catch(error){const status=error instanceof AppError?error.status:502;
+    if(!res.headersSent){res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify({error:error instanceof AppError?error.message:'视频服务暂时不可用'}));}
+  }
+}
