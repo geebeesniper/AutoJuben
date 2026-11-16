@@ -21,6 +21,7 @@ export const coreMutations = {
   changeMemberRole: (_root: unknown, args: any, context: Context) => coreServiceMutations.changeMemberRole(_root, args, context),
   removeMember: (_root: unknown, args: any, context: Context) => coreServiceMutations.removeMember(_root, args, context),
   saveProviderKey: (_root: unknown, args: any, context: Context) => coreServiceMutations.saveProviderKey(_root, args, context),
+  saveProviderApiRoutes: (_root: unknown, args: any, context: Context) => coreServiceMutations.saveProviderApiRoutes(_root, args, context),
   resolveSubmission: (_root: unknown, args: any, context: Context) => coreServiceMutations.resolveSubmission(_root, args, context),
   createVideoJob: (_root: unknown, args: any, context: Context) => coreServiceMutations.createVideoJob(_root, args, context),
 };
