@@ -29,7 +29,7 @@ export function buildTrendWindow(preset:Preset,fromDay:string,toDay:string,now=n
 export function trendKeys(range:TrendWindow):string[]{
  const keys:string[]=[];
  if(range.unit==='hour'){
-  for(let date=new Date(range.from);date.getTime()<Date.parse(range.to)&&keys.length<100;date=new Date(date.getTime()+3600000))
+  for(let date=new Date(range.from);date.getTime()<Math.min(Date.parse(range.to),Date.now()+1000)&&keys.length<100;date=new Date(date.getTime()+3600000))
    keys.push(date.toISOString().slice(0,13)+':00:00Z');
  }else{
   for(let date=localDay(range.fromDay);date<=localDay(range.toDay)&&keys.length<366;date=shift(date,1))keys.push(dateKey(date));
@@ -52,6 +52,7 @@ export function useTrendDates(){
  const [toDay,setToDay]=useState(dateKey(new Date()));
  const [range,setRange]=useState<TrendWindow>(()=>buildTrendWindow('today','',''));
  const [error,setError]=useState(false);
+ const [refreshTick,setRefreshTick]=useState(0);
  function choose(next:Preset){
   setPreset(next);setError(false);
   if(next==='custom')return;
@@ -61,8 +62,8 @@ export function useTrendDates(){
   try{setRange(buildTrendWindow('custom',fromDay,toDay));setPreset('custom');setError(false);}
   catch{setError(true);}
  }
- function refresh(){try{setRange(buildTrendWindow(preset,fromDay,toDay));setError(false);}catch{setError(true);}}
- return {preset,fromDay,toDay,range,error,choose,apply,refresh,setFromDay:(v:string)=>{setFromDay(v);setPreset('custom');},setToDay:(v:string)=>{setToDay(v);setPreset('custom');}};
+ function refresh(){try{setRange(buildTrendWindow(preset,fromDay,toDay));setError(false);setRefreshTick(n=>n+1);}catch{setError(true);}}
+ return {preset,fromDay,toDay,range,error,refreshTick,choose,apply,refresh,setFromDay:(v:string)=>{setFromDay(v);setPreset('custom');},setToDay:(v:string)=>{setToDay(v);setPreset('custom');}};
 }
 export function TrendDateFilter({dates,busy=false,onRefresh}:{dates:ReturnType<typeof useTrendDates>;busy?:boolean;onRefresh?:()=>void}){
  const {t}=useI18n();
