@@ -4,11 +4,15 @@ import { requireMembership } from '../auth/sessions.js';
 import type { Context } from '../models/context.js';
 import { assert } from '../utils/errors.js';
 import { checkoutCredits,createPortal,myCards } from '../billing/stripe.js';
-import { platformSettings,walletBalance,isPlatformAdmin } from '../billing/common.js';
+import { platformSettings,walletBalance } from '../billing/common.js';
+import {platformRole,adminRolePermissions} from './admin.service.js';
 const requireUser=(ctx:Context)=>{assert(ctx.user,'请先登录',401);return ctx.user;};
 
 export const portalServiceQueries={
- viewerCapabilities:(_:unknown,_a:unknown,ctx:Context)=>({platformAdmin:isPlatformAdmin(ctx.user)}),
+ viewerCapabilities:async(_:unknown,_a:unknown,ctx:Context)=>{
+  const role=await platformRole(ctx.user);
+  return {platformAdmin:Boolean(role),adminRole:role??'',adminCapabilities:role?[...adminRolePermissions(role)]:[]};
+ },
  myHistory:async (_:unknown,{orgId,limit}:{orgId:string;limit:number},ctx:Context)=>{
   const u=requireUser(ctx);await requireMembership(u,orgId);
   assert(Number.isInteger(limit)&&limit>=1&&limit<=100,'最多 100 条',400);
