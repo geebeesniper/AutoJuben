@@ -1,5 +1,5 @@
 export const portalTypeDefs=/* GraphQL */`
- type ViewerCapabilities { platformAdmin: Boolean! }
+ type ViewerCapabilities { platformAdmin: Boolean! adminRole: String! adminCapabilities: [String!]! }
  type AccountActivity { id: ID! action: String! detail: String! createdAt: String! }
  type PurchaseOrder { id: ID! orgId: ID! productName: String! credits: Int! amountCents: Int! currency: String! status: String! refundedAmountCents: Int! createdAt: String! paidAt: String }
  type BillingProduct { id: ID! sku: String! name: String! description: String! credits: Int! amountCents: Int! currency: String! active: Boolean! }
