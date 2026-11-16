@@ -3,7 +3,7 @@ import { findUsers,findOrders,allProducts,allTariffs,findUserEmail,setUserDisabl
   upsertProduct,upsertTariff,deleteTariff,hasActiveProduct,hasActiveTariff,setBillingFlags,
   updateStripeSettings,updateGlobalVideoKey,
   adminStaffRole,adminStaffList,adminSetStaffRole,adminAudit,adminLedgerRows,
-  adminInvestigationRows,adminThreads,adminThreadMessages,adminCreateThread,adminPostMessage,adminChangeThread } from '../repositories/admin.repository.js';
+  adminInvestigationRows,adminThreads,adminThreadMessages,adminCreateThread,adminPostMessage,adminChangeThread,adminOverviewRows } from '../repositories/admin.repository.js';
 import { isoDate,billingProductView,adminOrderView } from '../models/view-models.js';
 import { encryptSecret } from '../auth/security.js';
 import { config } from '../config.js';
@@ -64,6 +64,50 @@ async function apiInfo(){
   globalKeyConfigured:Boolean(s.provider_key_ciphertext||config.providerKey),endpointEditableInVercel:true};
 }
 export const adminServiceQueries={
+ adminOverview:async (_:unknown,args:{from:string;to:string;timezone:string;unit:string},ctx:Context)=>{
+   const actor=await asAdmin(ctx,'investigation');
+   assert(args.from.length<=40&&args.to.length<=40&&args.timezone.length<=80,'查询参数过长',400);
+   assert(['hour','day'].includes(args.unit),'时间粒度无效',400);
+   const start=Date.parse(args.from),end=Date.parse(args.to),now=Date.now();
+   assert(Number.isFinite(start)&&Number.isFinite(end)&&start<end,'时间范围无效',400);
+   const elapsed=end-start;
+   assert(elapsed<=366*86400000+3600000,'单次最多查询366天',400);
+   assert(elapsed>=3600000,'时间范围过短',400);
+   assert(start<=now&&end<=now+27*3600000,'不能选择未来时间段',400);
+   if(args.unit==='hour')assert(elapsed<=75*3600000,'小时趋势单次最多显示3天',400);
+   try{new Intl.DateTimeFormat('en-US',{timeZone:args.timezone}).format(new Date());}
+   catch{assert(false,'不支持的时区',400);}
+   const canRevenue=permissions[actor.role].includes('ledger');
+   const unit=args.unit as 'hour'|'day';
+   const raw=await adminOverviewRows({from:new Date(start).toISOString(),to:new Date(end).toISOString(),
+      timezone:args.timezone,unit,withRevenue:canRevenue});
+   type Point={key:string;revenueCents:number|null;alerts:number;errors:number;online:number|null;peak:number|null};
+   const points=new Map<string,Point>();
+   const row=(key:string)=>{
+     let record=points.get(key);
+     if(!record){record={key,revenueCents:canRevenue?0:null,alerts:0,errors:0,online:raw.tracked?0:null,peak:raw.tracked?0:null};points.set(key,record);}
+     return record;
+   };
+   for(const v of raw.revenue)row(v.key).revenueCents=Number(v.value);
+   for(const v of raw.alerts)row(v.key).alerts=Number(v.value);
+   for(const v of raw.errors)row(v.key).errors=Number(v.value);
+   // The most recent 5-minute sample is online users; the highest sample is the peak.
+   // These are sampled active USERS, not number of open browser connections.
+   const latest=new Map<string,number>();
+   const dayFormatter=new Intl.DateTimeFormat('en-US',{timeZone:args.timezone,year:'numeric',month:'2-digit',day:'2-digit'});
+   for(const v of raw.presence){
+     const tick=new Date(v.tick);
+     const key=unit==='hour'?tick.toISOString().slice(0,13)+':00:00Z':(()=>{
+       const x=Object.fromEntries(dayFormatter.formatToParts(tick).map(z=>[z.type,z.value]));
+       return x.year+'-'+x.month+'-'+x.day;
+     })();
+     const point=row(key);
+     const users=Number(v.users);
+     if(!latest.has(key)||tick.getTime()>latest.get(key)!){point.online=users;latest.set(key,tick.getTime());}
+     point.peak=Math.max(Number(point.peak??0),users);
+   }
+   return {canRevenue,hasPresence:raw.tracked,buckets:[...points.values()].sort((a,b)=>a.key.localeCompare(b.key))};
+ },
  adminStaff:async (_:unknown,_args:unknown,ctx:Context)=>{
    await asAdmin(ctx,'staff');
    return (await adminStaffList()).map((s:any)=>({userId:s.user_id,email:s.email,name:s.name,role:s.role,active:s.active,updatedAt:isoDate(s.updated_at)}));
