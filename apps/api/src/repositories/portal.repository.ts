@@ -17,7 +17,7 @@ export async function publishedHelpArticles(category:string,search:string,locale
  const title=fields[0],body=fields[1];
  return (await query(`SELECT id,slug,category,${title} AS title,${body} AS answer
  FROM help_articles WHERE published=true AND ($1='' OR category=$1)
- AND ($2='' OR ${title} ILIKE $2 ESCAPE '\\\\' OR ${body} ILIKE $2 ESCAPE '\\\\')
+ AND ($2='' OR strpos(lower(${title}),lower($2))>0 OR strpos(lower(${body}),lower($2))>0)
  ORDER BY category,sort_order,slug LIMIT $3`,
  [category,search,limit])).rows;
 }
