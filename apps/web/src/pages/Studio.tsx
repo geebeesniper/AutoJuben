@@ -1,5 +1,5 @@
 import { useRef,useState } from 'react';
-import { ArrowRight, Check, Clapperboard, Film, Headphones, Image as ImageIcon, Plus, Sparkles, Trash2, UploadCloud, WandSparkles } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Check, Clapperboard, Film, Headphones, Image as ImageIcon, Plus, Sparkles, Trash2, UploadCloud, WandSparkles } from 'lucide-react';
 import { gql,uploadAsset,type Org,type Project,type UploadedAsset,type VideoJob } from '../lib/api';
 const hints={image:'角色、场景和风格参考，最多 9 张',audio:'旁白、配音或音效参考，最多 3 个',video:'动作、镜头和节奏参考，最多 3 个'};
 type Kind='image'|'audio'|'video';
@@ -32,6 +32,15 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
     }catch(error){onNotify(error instanceof Error?error.message:'文件上传失败');}
     finally{setUploading(null);}
   }
+  function reorderImage(from:number,to:number) {
+    setUploads(prev=>{
+      if(from<0||to<0||from>=prev.image.length||to>=prev.image.length)return prev;
+      const image=[...prev.image];
+      const [item]=image.splice(from,1);
+      image.splice(to,0,item);
+      return {...prev,image};
+    });
+  }
   async function create() {
     if(!prompt.trim()){onNotify('请先输入视频内容提示词');return;}
     if(totalMedia>12){onNotify('所有参考素材合计最多 12 个');return;}
@@ -56,7 +65,15 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
     <section className="panel studio-panel"><div className="panel-heading"><div><h2><ImageIcon size={18}/> 参考素材</h2><p>支持直接上传文件，或提供可公开访问的素材链接（建议 HTTPS）</p></div><span className="info-chip">{totalMedia}/12</span></div>
       <div className="media-stack">{mediaTypes.map(m=><div key={m.kind} className="media-card"><div className="media-card-heading"><div className="media-icon">{m.icon}</div><div><h3>{m.title}</h3><p>{hints[m.kind]}</p></div><span>{lines(mediaUrls[m.kind]).length+uploads[m.kind].length}/{m.max}</span></div>
         <textarea className="url-editor" placeholder={`每行一个素材 URL（https://…）`} value={mediaUrls[m.kind]} onChange={e=>setMediaUrls(prev=>({...prev,[m.kind]:e.target.value}))}/>
-        {!!uploads[m.kind].length&&<div className="asset-list">{uploads[m.kind].map(a=><div className="asset-chip" key={a.id}><Check size={13}/><span title={a.name}>{a.name}</span><button aria-label="移除素材" onClick={()=>setUploads(prev=>({...prev,[m.kind]:prev[m.kind].filter(x=>x.id!==a.id)}))}><Trash2 size={13}/></button></div>)}</div>}
+        {!!uploads[m.kind].length&&<div className="asset-list">{uploads[m.kind].map((a,index)=><div className="asset-chip" key={a.id}>
+          {m.kind==='image'&&<span className="asset-order-index" aria-label={`参考图 ${index+1}`}>{index+1}</span>}
+          <Check size={13}/><span title={a.name}>{a.name}</span>
+          {m.kind==='image'&&<div className="asset-move-controls">
+            <button type="button" disabled={index===0} title="上一帧" aria-label={`将 ${a.name} 上移`} onClick={()=>reorderImage(index,index-1)}><ArrowUp size={13}/></button>
+            <button type="button" disabled={index===uploads.image.length-1} title="下一帧" aria-label={`将 ${a.name} 下移`} onClick={()=>reorderImage(index,index+1)}><ArrowDown size={13}/></button>
+          </div>}
+          <button type="button" aria-label="移除素材" onClick={()=>setUploads(prev=>({...prev,[m.kind]:prev[m.kind].filter(x=>x.id!==a.id)}))}><Trash2 size={13}/></button>
+        </div>)}</div>}
         <label className="upload-btn"><UploadCloud size={15}/>{uploading===m.kind?'上传中…':'上传本地文件'}<input type="file" multiple accept={m.accept} disabled={uploading!==null} onChange={e=>{void onFiles(m.kind,e.target.files);e.currentTarget.value='';}}/></label>
       </div>)}</div>
     </section>
