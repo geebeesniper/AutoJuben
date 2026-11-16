@@ -5,6 +5,12 @@ export const adminTypeDefs=/* GraphQL */`
  type AdminApiSettings { baseUrl: String! mock: Boolean! globalKeyConfigured: Boolean! endpointEditableInVercel: Boolean! }
  type VideoTariff { model: String! resolution: String! credits: Int! active: Boolean! }
  type AdminConnectionTest { ok: Boolean! message: String! }
+ type AdminOperationsTrendBucket {
+  key: String! revenueCents: Float alerts: Float! errors: Float! online: Float peak: Float
+ }
+ type AdminOperationsOverview {
+  canRevenue: Boolean! hasPresence: Boolean! buckets: [AdminOperationsTrendBucket!]!
+ }
  type AdminRoleInfo { role: String! capabilities: [String!]! }
  type AdminStaffMember { userId: ID! email: String! name: String! role: String! active: Boolean! updatedAt: String! }
  type AdminLedgerEntry { id: ID! orgId: ID! orgName: String! delta: Int! sourceType: String! sourceId: String! createdAt: String! }
@@ -23,6 +29,7 @@ export const adminTypeDefs=/* GraphQL */`
  }
  extend type Query {
   adminMyRole: AdminRoleInfo!
+  adminOverview(from: String!,to: String!,timezone: String!,unit: String!): AdminOperationsOverview!
   adminStaff: [AdminStaffMember!]!
   adminLedger(orgId: String="",sourceType: String="",search: String="",from: String="",to: String="",before: String="",limit: Int=50): [AdminLedgerEntry!]!
   adminInvestigations(orgId: String="",eventType: String="",search: String="",userId: String="",from: String="",to: String="",before: String="",limit: Int=50): [AdminInvestigationEvent!]!
