@@ -62,6 +62,33 @@ curl -X POST 'https://YOUR_DOMAIN/api/json' \
   -d '{"operation":"jobs","params":{"orgId":"ORG_ID","limit":10}}'
 ```
 
+## Provider API mapping in Settings (151 nine-reference-video service)
+
+The existing **`151_9tu_api_integration.md` v1.0** is the upstream contract source. The five endpoints below are **provider paths**, not public AutoJuben REST/GraphQL routes. In authenticated **Settings → Video provider API endpoints**, workspace Owner/Admin can redefine the provider paths and choose the documented authentication header. Configuration lives in PostgreSQL (`sql/007_provider_api_routes.sql`), scoped by `org_id`. Its read/write is a privileged **GraphQL session-only management operation**, like existing provider key settings; never accessible through workspace API Keys.
+
+| Upstream operation | HTTP method | 151 default provider path |
+| --- | --- | --- |
+| Pricing | GET | `/api/pricing` |
+| Models / public settings | GET | `/api/public-settings` |
+| Submit video | POST | `/api/generate-video` |
+| Job state | GET | `/api/task/{task_id}` |
+| Video link fallback | GET | `/api/task/{task_id}/video-link` |
+
+`providerInfo(orgId)` returns an `endpoints` object and readable API state. `saveProviderApiRoutes(orgId,input)` validates and saves all five paths plus `authMode`: `license_key` (`X-License-Key`) or `bearer` (`Authorization: Bearer`). All five settings affect the **existing server-side provider client**, including pricing, submission, status polling and video-link recovery. Paths must be rooted in `/api/`; task-specific paths must contain a single `{task_id}` segment. Full URLs, query strings, traversal, protocols, and custom hosts are forbidden in workspace settings. Changing endpoint configuration while the workspace has pending/in-progress video jobs is refused to prevent mismatched submissions/polling. All changes are audited without key values.
+
+The **upstream base origin** is still configured by Vercel `VIDEO_API_BASE_URL`; arbitrary customer-defined domains are not accepted (preventing SSRF and credential exfiltration). Provider redirects are rejected to avoid sending `X-License-Key` or Bearer credentials to another host. Real upstream calls require HTTPS unless the server owner explicitly enables the unsafe HTTP development override. The 151 document's example base URL is `http://113.207.49.151:8045`, which **must not** be contacted with a license key in ordinary production without an HTTPS endpoint.
+
+The AutoJuben public APIs remain fixed for backward compatibility: `POST /graphql`, `/api/v1/...` REST and `POST /api/json`. Changing these paths is **not** a workspace endpoint setting; a breaking platform API route change requires an explicit version, protected contract review, tests and documentation. GraphQL management mutations are session-only and excluded from API-key REST/JSON exposure.
+
+### Provider integration verification checklist
+
+- Apply `sql/007_provider_api_routes.sql` after `001–005` on a new Supabase project (the separate storyboard `006` is staged independently). Never re-run migrations blindly on existing production databases.
+- Authenticate an Owner/Admin and verify saving/reloading route definitions across page refreshes; a Viewer may read but cannot edit. Confirm a different tenant cannot update these values.
+- Compare `GET /api/pricing` and `GET /api/public-settings` results against the chosen provider paths without hardcoding model prices.
+- Test reference submissions for images (up to nine), audio (up to three), and video (up to three), with total source references capped at 12, `client_task_id` idempotency and no duplicated charges.
+- Verify polling and fallback video-link route behavior; no blind retries on failed/unknown submissions; settle/refund credit reservations correctly.
+- Check HTTPS validation, rejection of host/query/path traversal attempts, error messages and audit logs. No real provider requests while `MOCK_VIDEO_PROVIDER=true`.
+
 ## Security contract
 
 - Workspaces are isolated by `orgId` and existing `requireMembership` checks in Services. Do not use global user identifiers to bypass org membership.
