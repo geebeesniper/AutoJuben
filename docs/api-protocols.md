@@ -104,6 +104,23 @@ The AutoJuben public APIs remain fixed for backward compatibility: `POST /graphq
 
 **Security and release checks:** verify customer A cannot query, reply to or enumerate customer B's ticket; customer cannot access a staff-only conversation; a staff-only internal message is never returned even if manually inserted into a customer thread; anonymous users cannot submit tickets; disabled accounts cannot use old sessions; non-messaging staff cannot access admin threads. Run cases with two real users and separate admin roles on staging after running the unapplied `sql/008_enterprise_admin.sql`. The three public AutoJuben API transports remain backward-compatible; these new support operations are **session-authenticated GraphQL** and must not be added to the workspace API-key REST/JSON allowlist without independent contract review.
 
+## Operations Overview — time-series metrics, presence and role-bound access
+
+The enterprise backend's **first menu** is `adminOverview` (Operations Overview). Its read-only `adminOverview(from: String!,to: String!,timezone: String!,unit: String!)` GraphQL query returns `canRevenue`, `hasPresence`, and sparse `buckets { key revenueCents alerts errors online peak }`. The server authorizes the logged-in platform administrator with the existing `investigation` capability, validates IANA timezone, bounded date/time interval (<=366 calendar days), and hourly versus daily granularity. It also restricts revenue data to roles with `ledger` capability. This is **not** an API Key REST/JSON operation.
+
+The WOS-style frontend date selection uses Today, Yesterday, Previous 3 complete days and Previous 7 complete days, plus From/To and explicit Apply. Previous periods exclude Today. The upper bound is exclusive (next local midnight) to capture full days even across DST. For up to three days, group by UTC hour and label in the operator's timezone; longer ranges use local calendar-day buckets. Invalid, future and >366-day date selections are rejected.
+
+The five independent graphs are database-backed:
+- **Revenue**: `purchase_orders` net amount, only paid/refunded transactions, grouped on original `paid_at`. This convention does **not** date refunds by actual refund timestamps.
+- **Alerts**: video jobs currently failed (using completed/updated timestamp) plus newly created customer support tickets with high or urgent priority.
+- **Errors**: one per API request with HTTP 5xx **or** GraphQL error count >0, counted once.
+- **Online users**: latest 5-minute count of distinct authenticated, foreground-active users in each displayed interval.
+- **User peak**: highest such 5-minute count in each interval.
+
+`recordMyPresence` is an authenticated customer-portal GraphQL mutation. The existing frontend invokes it only while visible, approximately every 60 seconds. It writes one deduplicated `(user_id,sample_at)` row per five-minute UTC bucket to `platform_presence_samples` (SQL 008, server-side only, RLS on). Sampling cannot reconstruct past sessions that occurred before this table was enabled. `hasPresence=false` denotes not-yet-collected samples; unlike preview data, the real UI never manufactures activity or revenue figures.
+
+The existing `apps/api/src/services/admin.service.ts` and `repositories/admin.repository.ts` own business rules and indexed aggregation respectively. Review privileges, time boundaries and high-cardinality query plans with realistic data before enabling a production rollout. This feature remains **staged** until Supabase and SQL 008 are provisioned and verified.
+
 ## Security contract
 
 - Workspaces are isolated by `orgId` and existing `requireMembership` checks in Services. Do not use global user identifiers to bypass org membership.
