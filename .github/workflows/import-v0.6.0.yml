@@ -1,9 +1,11 @@
 name: Import verified AutoJuben v0.6.0 archive
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - 'imports/autojuben-cmm-mvc-3api-v0.6.0.zip'
+      - '.github/workflows/import-v0.6.0.yml'
 permissions:
   contents: write
 jobs:
