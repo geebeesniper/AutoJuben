@@ -139,17 +139,17 @@ export async function adminInvestigationRows(args:{orgId:string;eventType:string
  args.userId||null,args.from,args.to,args.before?args.before.split('|')[0]:null,
  args.before?args.before.split('|')[1]:null,args.before?args.before.split('|')[2]:null,args.limit])).rows;
 }
-export async function adminThreads(args:{search:string;status:string;category:string;limit:number}){
- return (await query(`SELECT t.id,t.subject,t.category,t.status,t.priority,
+export async function adminThreads(args:{search:string;status:string;category:string;channel:'internal'|'customer';limit:number}){
+ return (await query(`SELECT t.id,t.subject,t.channel,t.category,t.status,t.priority,
  t.customer_id AS "customerId",u.email AS "customerEmail",t.assigned_admin_id AS "assignedAdminId",
  s.name AS "assignedAdmin",t.created_at AS "createdAt",t.updated_at AS "updatedAt",
  (SELECT count(*)::int FROM platform_messages m WHERE m.thread_id=t.id) AS "messageCount"
  FROM platform_message_threads t
  LEFT JOIN users u ON u.id=t.customer_id LEFT JOIN users s ON s.id=t.assigned_admin_id
- WHERE ($1='' OR t.subject ILIKE $1 OR u.email ILIKE $1)
+ WHERE t.channel=$5 AND ($1='' OR t.subject ILIKE $1 OR u.email ILIKE $1)
  AND ($2='' OR t.status=$2) AND ($3='' OR t.category=$3)
  ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,t.updated_at DESC
- LIMIT $4`,[args.search?`%${escapeLike(args.search)}%`:'',args.status,args.category,args.limit])).rows;
+ LIMIT $4`,[args.search?`%${escapeLike(args.search)}%`:'',args.status,args.category,args.limit,args.channel])).rows;
 }
 export async function adminThreadMessages(threadId:string,limit:number){
  const exists=(await query('SELECT 1 FROM platform_message_threads WHERE id=$1',[threadId])).rows[0];
@@ -161,13 +161,13 @@ export async function adminThreadMessages(threadId:string,limit:number){
 }
 export async function adminCreateThread(subject:string,category:string,priority:string,customerId:string|null,assignedAdminId:string|null,userId:string){
  return (await query(`INSERT INTO platform_message_threads
- (subject,category,priority,customer_id,assigned_admin_id,created_by)
- VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+ (subject,channel,category,priority,customer_id,assigned_admin_id,created_by)
+ VALUES($1,'internal',$2,$3,NULL,$5,$6) RETURNING id`,
  [subject,category,priority,customerId,assignedAdminId,userId])).rows[0];
 }
 export async function adminPostMessage(threadId:string,actorId:string,content:string){
  const inserted=(await query(`INSERT INTO platform_messages(thread_id,sender_id,content,internal)
- SELECT id,$2,$3,true FROM platform_message_threads WHERE id=$1 AND status<>'closed'
+ SELECT id,$2,$3,(channel='internal') FROM platform_message_threads WHERE id=$1 AND status<>'closed'
  RETURNING id`,[threadId,actorId,content])).rows[0];
  if(inserted)await query('UPDATE platform_message_threads SET updated_at=now() WHERE id=$1',[threadId]);
  return inserted;
