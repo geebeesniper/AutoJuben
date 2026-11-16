@@ -1,6 +1,7 @@
 import { useRef,useState } from 'react';
 import { ArrowDown, ArrowRight, ArrowUp, Check, Clapperboard, Film, Headphones, Image as ImageIcon, Plus, Sparkles, Trash2, UploadCloud, WandSparkles } from 'lucide-react';
 import { gql,uploadAsset,type Org,type Project,type UploadedAsset,type VideoJob } from '../lib/api';
+import {useI18n} from '../i18n';
 const hints={image:'角色、场景和风格参考，最多 9 张',audio:'旁白、配音或音效参考，最多 3 个',video:'动作、镜头和节奏参考，最多 3 个'};
 type Kind='image'|'audio'|'video';
 const mediaTypes:{kind:Kind;title:string;icon:React.ReactNode;accept:string;max:number}[]=[
@@ -10,6 +11,7 @@ const mediaTypes:{kind:Kind;title:string;icon:React.ReactNode;accept:string;max:
 ];
 const lines=(value:string)=>value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Project[];onCreated:(job:VideoJob)=>void;onNotify:(msg:string,success?:boolean)=>void}) {
+  const {t}=useI18n();
   const [prompt,setPrompt]=useState('');const [projectId,setProjectId]=useState('');const [model,setModel]=useState('xinghe-2.0');
   const [ratio,setRatio]=useState('9:16');const [duration,setDuration]=useState(15);const [resolution,setResolution]=useState('720p');
   const [mediaUrls,setMediaUrls]=useState<Record<Kind,string>>({image:'',audio:'',video:''});
@@ -66,11 +68,11 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
       <div className="media-stack">{mediaTypes.map(m=><div key={m.kind} className="media-card"><div className="media-card-heading"><div className="media-icon">{m.icon}</div><div><h3>{m.title}</h3><p>{hints[m.kind]}</p></div><span>{lines(mediaUrls[m.kind]).length+uploads[m.kind].length}/{m.max}</span></div>
         <textarea className="url-editor" placeholder={`每行一个素材 URL（https://…）`} value={mediaUrls[m.kind]} onChange={e=>setMediaUrls(prev=>({...prev,[m.kind]:e.target.value}))}/>
         {!!uploads[m.kind].length&&<div className="asset-list">{uploads[m.kind].map((a,index)=><div className="asset-chip" key={a.id}>
-          {m.kind==='image'&&<span className="asset-order-index" aria-label={`参考图 ${index+1}`}>{index+1}</span>}
+          {m.kind==='image'&&<span className="asset-order-index" aria-label={`${t('referenceFrame')} ${index+1}`}>{index+1}</span>}
           <Check size={13}/><span title={a.name}>{a.name}</span>
           {m.kind==='image'&&<div className="asset-move-controls">
-            <button type="button" disabled={index===0} title="上一帧" aria-label={`将 ${a.name} 上移`} onClick={()=>reorderImage(index,index-1)}><ArrowUp size={13}/></button>
-            <button type="button" disabled={index===uploads.image.length-1} title="下一帧" aria-label={`将 ${a.name} 下移`} onClick={()=>reorderImage(index,index+1)}><ArrowDown size={13}/></button>
+            <button type="button" disabled={index===0} title={t('moveUp')} aria-label={`${t('moveUp')}: ${a.name}`} onClick={()=>reorderImage(index,index-1)}><ArrowUp size={13}/></button>
+            <button type="button" disabled={index===uploads.image.length-1} title={t('moveDown')} aria-label={`${t('moveDown')}: ${a.name}`} onClick={()=>reorderImage(index,index+1)}><ArrowDown size={13}/></button>
           </div>}
           <button type="button" aria-label="移除素材" onClick={()=>setUploads(prev=>({...prev,[m.kind]:prev[m.kind].filter(x=>x.id!==a.id)}))}><Trash2 size={13}/></button>
         </div>)}</div>}
