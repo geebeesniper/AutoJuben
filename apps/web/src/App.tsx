@@ -1,6 +1,8 @@
 import { useEffect,useState } from 'react';
 import { Activity,ArrowUpRight,CheckCircle2,ChevronDown,Clapperboard,Cloud,FolderKanban,LayoutDashboard,ListVideo,LogOut,Menu,Plus,RefreshCw,Settings,Sparkles,Users,X,Download,Clock3,CircleAlert,ServerCog,History,CreditCard,Receipt,ShoppingBag,UserRound,UsersRound,Landmark,CloudCog } from 'lucide-react';
 import { AuthPage } from './pages/Auth';
+import {DemoPreview} from './pages/DemoPreview';
+import {LanguageProvider,LanguageSelect,useI18n} from './i18n';
 import { DashboardPage } from './pages/Dashboard';
 import { Studio } from './pages/Studio';
 import { ProjectsPage } from './pages/Projects';
@@ -54,7 +56,8 @@ function JobDetails({j,org,onClose,onResolved,onNotify}:{j:VideoJob;org:Org;onCl
     {j.status==='submission_unknown'&&<><p className="small-note">为了避免重复计费，此状态不会自动重新提交。请联系服务商确认对应 client_task_id：{j.clientTaskId}</p>{['owner','admin'].includes(org.role)&&<div className="reconcile-box"><b>管理员人工核实</b><p>如果找到上游 task_id，可以恢复轮询；如果明确确认未受理，可标记失败并释放本系统的活动任务配额（不会修改上游积分）。</p><input value={providerTaskId} onChange={e=>setProviderTaskId(e.target.value)} placeholder="上游 provider task_id"/><div className="reconcile-actions"><button disabled={busy||providerTaskId.trim().length<5} className="btn btn-primary" onClick={()=>void reconcile(false)}>继续查询任务</button><button disabled={busy} className="btn btn-ghost" onClick={()=>void reconcile(true)}>确认未受理</button></div></div>}</>}
   </div></div>;
 }
-export default function App() {
+function MainApp() {
+  const {t}=useI18n();
   const [user,setUser]=useState<User|null>(null);const [orgs,setOrgs]=useState<Org[]>([]);const [orgId,setOrgId]=useState('');
   const [page,setPage]=useState<Screen>(initialPage);const [data,setData]=useState<AppData|null>(null);const [booting,setBooting]=useState(true);
   const [loading,setLoading]=useState(false);const [error,setError]=useState('');const [toast,setToast]=useState<{text:string;ok:boolean}|null>(null);
@@ -71,21 +74,21 @@ export default function App() {
   async function logout(){try{await authRequest('logout',{});}finally{setUser(null);setData(null);setOrgId('');setOrgs([]);setPlatformAdmin(false);}}
   async function addOrg(){const name=window.prompt('请输入新工作区名称：');if(!name?.trim())return;try{const r=await gql<{createOrganization:Org}>(`mutation($name:String!){createOrganization(name:$name){id name slug role createdAt}}`,{name});setOrgs(prev=>[...prev,r.createOrganization]);setOrgId(r.createOrganization.id);setPage('overview');notify('工作区已建立',true);}catch(e){notify(e instanceof Error?e.message:'创建工作区失败');}}
   function navigate(p:string){setPage(p as Screen);setMobile(false);window.history.replaceState({},'',`${adminScreens.includes(p as typeof adminScreens[number])?'/admin':'/app'}?tab=${p}`);window.scrollTo({top:0,behavior:'smooth'});}
-  if(booting)return <div className="boot-screen"><span className="logo-mark"><Clapperboard size={26}/></span><p>AutoJuben Cloud · Loading</p></div>;
+  if(booting)return <div className="boot-screen"><span className="logo-mark"><Clapperboard size={26}/></span><p>AutoJuben Cloud · {t('loading')}</p></div>;
   if(!user||new URLSearchParams(window.location.search).get('auth')==='reset'||window.location.hash.includes('type=recovery'))return <AuthPage onAuth={onAuth}/>;
   return <div className="app-shell"><aside className={`sidebar ${mobile?'show':''}`}><div className="sidebar-brand"><span className="logo-mark"><Clapperboard size={24}/></span><div><b>AUTOJUBEN</b><small>CREATIVE CLOUD</small></div><button className="mobile-close" onClick={()=>setMobile(false)}><X size={20}/></button></div>
-    <div className="workspace-picker"><span>当前工作区</span><div className="workspace-picker-row"><div className="workspace-square">{org?.name?.slice(0,1).toUpperCase()??'A'}</div><select value={org?.id??''} onChange={e=>setOrgId(e.target.value)} aria-label="切换工作区">{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select><ChevronDown size={14}/></div></div>
+    <div className="workspace-picker"><span>{t('currentWorkspace')}</span><div className="workspace-picker-row"><div className="workspace-square">{org?.name?.slice(0,1).toUpperCase()??'A'}</div><select value={org?.id??''} onChange={e=>setOrgId(e.target.value)} aria-label="切换工作区">{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select><ChevronDown size={14}/></div></div>
     <div className="nav-scroll">{(['workspace','customer','manage','platform'] as Section[]).filter(section=>section!=='platform'||platformAdmin).map(section=><div key={section}>
-        <div className="nav-label manage-label">{{workspace:'CREATIVE WORKSPACE',customer:'CUSTOMER ACCOUNT',manage:'WORKSPACE TOOLS',platform:'PLATFORM ADMIN'}[section]}</div>
-        {nav.filter(n=>n.section===section).filter(n=>n.section!=='manage'||['owner','admin'].includes(org?.role??'')).map(n=><button key={n.id} className={`nav-link ${page===n.id?'active':''}`} onClick={()=>navigate(n.id)}>{n.icon}<span>{n.label}</span>{page===n.id&&<span className="nav-active-dot"/>}</button>)}
+        <div className="nav-label manage-label">{t(({workspace:'workspace',customer:'customerArea',manage:'management',platform:'platformArea'} as const)[section])}</div>
+        {nav.filter(n=>n.section===section).filter(n=>n.section!=='manage'||['owner','admin'].includes(org?.role??'')).map(n=><button key={n.id} className={`nav-link ${page===n.id?'active':''}`} onClick={()=>navigate(n.id)}>{n.icon}<span>{t('nav_'+n.id)}</span>{page===n.id&&<span className="nav-active-dot"/>}</button>)}
       </div>)}
-      <button className="nav-link create-workspace" onClick={()=>void addOrg()}><Plus size={18}/><span>新增工作区</span></button>
+      <button className="nav-link create-workspace" onClick={()=>void addOrg()}><Plus size={18}/><span>{t('createWorkspace')}</span></button>
     </div>
-    <div className="sidebar-bottom"><div className="sidebar-info"><span className="sidebar-glow"/><Cloud size={18}/><div><b>Cloud Workspace</b><small>{demo?'演示环境':'在线运行'}</small></div><CheckCircle2 size={16}/></div>
-      <div className="sidebar-user"><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div><div className="sidebar-user-details"><b>{user.name}</b><small>{org?.role??'—'}</small></div><button title="退出登录" onClick={()=>void logout()} className="icon-btn"><LogOut size={18}/></button></div></div>
+    <div className="sidebar-bottom"><div className="sidebar-info"><span className="sidebar-glow"/><Cloud size={18}/><div><b>Cloud Workspace</b><small>{demo?t('demoEnvironment'):t('online')}</small></div><CheckCircle2 size={16}/></div>
+      <div className="sidebar-user"><div className="avatar">{user.name.slice(0,1).toUpperCase()}</div><div className="sidebar-user-details"><b>{user.name}</b><small>{org?.role??'—'}</small></div><button title={t('logout')} onClick={()=>void logout()} className="icon-btn"><LogOut size={18}/></button></div></div>
   </aside>
     {mobile&&<div className="mobile-overlay" onClick={()=>setMobile(false)}/>}
-    <main className="app-main"><header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-btn" onClick={()=>setMobile(true)} aria-label="打开菜单"><Menu size={22}/></button><span className="breadcrumb">Workspace</span><span className="slash">/</span><b>{nav.find(n=>n.id===page)?.label}</b></div><div className="topbar-right">{demo===true&&<span className="demo-badge"><span/> DEMO MODE</span>}<button className="icon-btn refresh-top" title="刷新工作区数据" onClick={()=>void refresh()}><RefreshCw size={18} className={loading?'spin':''}/></button><span className="topbar-divider"/><div className="avatar top-avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
+    <main className="app-main"><header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-btn" onClick={()=>setMobile(true)} aria-label="打开菜单"><Menu size={22}/></button><span className="breadcrumb">Workspace</span><span className="slash">/</span><b>{t('nav_'+page)}</b></div><div className="topbar-right"><LanguageSelect compact/>{demo===true&&<span className="demo-badge"><span/> DEMO MODE</span>}<button className="icon-btn refresh-top" title="刷新工作区数据" onClick={()=>void refresh()}><RefreshCw size={18} className={loading?'spin':''}/></button><span className="topbar-divider"/><div className="avatar top-avatar">{user.name.slice(0,1).toUpperCase()}</div></div></header>
     <div className="page-content">{error&&<div className="notice danger"><CircleAlert size={17}/><span>{error}</span><button onClick={()=>void refresh()}>重试</button></div>}
       {org&&(data||portalScreens.some(x=>x===page)||adminScreens.some(x=>x===page))?<>
         {data&&page==='overview'&&<DashboardPage org={org} data={data} onNavigate={navigate} onSelect={setOpenJob}/>}
@@ -99,7 +102,14 @@ export default function App() {
         {platformAdmin&&adminScreens.some(x=>x===page)&&<AdminPage section={page as typeof adminScreens[number]} user={user} onNotify={notify}/>}
         {!platformAdmin&&adminScreens.some(x=>x===page)&&<div className="notice danger">当前账户没有平台管理员权限。</div>}
       </>:!loading&&!error?<div className="loading-panel"><Activity size={30} className="spin"/><p>正在加载你的工作区…</p></div>:null}</div>
-    <footer className="app-footer"><span>© AutoJuben Cloud · TypeScript / GraphQL</span><span>安全多租户工作区 · v0.4.0</span></footer>
+    <footer className="app-footer"><span>© AutoJuben Cloud · TypeScript / GraphQL</span><span>{t('workspace')} · v0.6.0</span></footer>
     </main>{openJob&&org&&<JobDetails j={data?.jobs.find(x=>x.id===openJob.id)??openJob} org={org} onClose={()=>setOpenJob(null)} onResolved={()=>void refresh()} onNotify={notify}/>} {toast&&<div className={`toast ${toast.ok?'toast-ok':'toast-err'}`} role="status"><span>{toast.ok?<CheckCircle2 size={17}/>:<CircleAlert size={17}/>}</span>{toast.text}<button onClick={()=>setToast(null)} aria-label="关闭提醒"><X size={15}/></button></div>}
   </div>;
+}
+
+export default function App(){
+ const path=window.location.pathname;
+ const isFrontend=['/preview/frontend','/preview/customer'].includes(path);
+ const isBackend=['/preview/backend','/preview/admin'].includes(path);
+ return <LanguageProvider>{isFrontend||isBackend?<DemoPreview view={isBackend?'backend':'frontend'}/>:<MainApp/>}</LanguageProvider>;
 }
