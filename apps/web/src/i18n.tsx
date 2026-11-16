@@ -5,6 +5,9 @@ type Entry=[string,string,string,string];
 const entries:Entry[]=[
 ['language','语言','Language','Idioma'],
 ['switchLanguage','切换语言','Choose language','Elegir idioma'],
+['referenceFrame','参考帧','Reference frame','Fotograma de referencia'],
+['moveUp','上移一帧','Move one frame up','Mover un fotograma hacia arriba'],
+['moveDown','下移一帧','Move one frame down','Mover un fotograma hacia abajo'],
 ['demoOnly','演示模式 · 虚拟数据','DEMO MODE · SAMPLE DATA','MODO DEMO · DATOS SIMULADOS'],
 ['previewFrontend','客户前台预览','Customer frontend preview','Vista previa del portal de clientes'],
 ['previewBackend','管理后台预览','Admin backend preview','Vista previa del panel administrativo'],
