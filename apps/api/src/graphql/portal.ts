@@ -23,6 +23,7 @@ export const portalTypeDefs=/* GraphQL */`
    billingAvailability: BillingAvailability!
  }
  extend type Mutation {
+   recordMyPresence: Boolean!
    openHelpTicket(category: String!,subject: String!,content: String!): ID!
    replyHelpTicket(threadId: ID!,content: String!): Boolean!
    updateMyName(name: String!): User!
