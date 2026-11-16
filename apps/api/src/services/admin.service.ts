@@ -98,11 +98,12 @@ export const adminServiceQueries={
    const rows=await adminInvestigationRows({orgId:'',eventType:'',search:'',userId,from:dates.from,to:dates.to,limit,before:null});
    return rows.map((r:any)=>({...r,createdAt:isoDate(r.createdAt)}));
  },
- adminInbox:async (_:unknown,{search,status,category,limit}:{search:string;status:string;category:string;limit:number},ctx:Context)=>{
+ adminInbox:async (_:unknown,{search,status,category,channel,limit}:{search:string;status:string;category:string;channel:string;limit:number},ctx:Context)=>{
    await asAdmin(ctx,'messaging');searchBounds(limit,search);
    assert(['','open','pending','resolved','closed'].includes(status),'无效工单状态');
-   assert(['','support','billing','technical','compliance','internal'].includes(category),'无效工单分类');
-   return (await adminThreads({search,status,category,limit})).map((r:any)=>({...r,createdAt:isoDate(r.createdAt),updatedAt:isoDate(r.updatedAt)}));
+   assert(['','support','billing','technical','compliance','internal','general','generation','account'].includes(category),'无效工单分类');
+   assert(['internal','customer'].includes(channel),'无效消息频道');
+   return (await adminThreads({search,status,category,channel:channel as 'internal'|'customer',limit})).map((r:any)=>({...r,createdAt:isoDate(r.createdAt),updatedAt:isoDate(r.updatedAt)}));
  },
  adminMessages:async (_:unknown,{threadId,limit}:{threadId:string;limit:number},ctx:Context)=>{
    await asAdmin(ctx,'messaging');searchBounds(limit,'');
@@ -153,15 +154,17 @@ export const adminServiceMutations={
    await adminAudit(actor.user.id,'staff.roleUpdated','user',userId,{role,active});
    return Boolean(updated);
  },
- adminCreateThread:async (_:unknown,{subject,category,priority,customerId,assignedAdminId}:{subject:string;category:string;priority:string;customerId?:string;assignedAdminId?:string},ctx:Context)=>{
+ adminCreateThread:async (_:unknown,{subject,category,priority,customerId,assignedAdminId,channel}:{subject:string;category:string;priority:string;customerId?:string;assignedAdminId?:string;channel:string},ctx:Context)=>{
    const actor=await asAdmin(ctx,'messaging');
    assert(subject.trim().length>=3&&subject.length<=200,'会话标题需3-200字符');
-   assert(['support','billing','technical','compliance','internal'].includes(category),'无效分类');
+   assert(['internal','customer'].includes(channel),'无效消息频道');
+   assert((channel==='internal'?['internal','support','billing','technical','compliance']:['general','generation','technical','billing','account']).includes(category),'无效频道类别');
+   assert(channel==='customer'?Boolean(customerId):!customerId,'客户频道必须指定用户，内部频道不得绑定客户');
    assert(['low','normal','high','urgent'].includes(priority),'优先级无效');
    if(customerId){assert(await findUserEmail(customerId),'客户不存在',404);}
    if(assignedAdminId){const assigned=await findUserEmail(assignedAdminId);assert(assigned,'负责人不存在',404);assert(isPlatformAdmin({id:assignedAdminId,name:'',email:assigned.email})||Boolean(await adminStaffRole(assignedAdminId)),'负责人不是平台管理员',403);}
-   const created=await adminCreateThread(subject.trim(),category,priority,customerId||null,assignedAdminId||null,actor.user.id);
-   await adminAudit(actor.user.id,'inbox.created','thread',created.id,{category,priority});
+   const created=await adminCreateThread(subject.trim(),category,priority,customerId||null,assignedAdminId||null,actor.user.id,channel as 'internal'|'customer');
+   await adminAudit(actor.user.id,'inbox.created','thread',created.id,{channel,category,priority});
    return created.id as string;
  },
  adminSendMessage:async (_:unknown,{threadId,content}:{threadId:string;content:string},ctx:Context)=>{
