@@ -38,6 +38,24 @@ export function validateProviderApiRoutes(candidate:ProviderApiRoutes):ProviderA
   if(!['license_key','bearer'].includes(candidate.authMode))throw new AppError(400,'不支持的 API 鉴权方式');
   return candidate;
 }
+/** Only server-preapproved provider origins may receive bearer/license credentials. */
+export function validateProviderBaseUrl(value:string):string{
+ let url:URL;
+ try{url=new URL(value);}catch{throw new AppError(400,'基础地址必须是完整的 HTTPS URL');}
+ if(url.username||url.password||url.search||url.hash||url.pathname!=='/'||
+    (url.protocol!=='https:'&&url.protocol!=='http:'))
+   throw new AppError(400,'基础地址只能包含 HTTPS 主机及端口，不可包含凭据、路径或查询参数');
+ if(url.protocol!=='https:'&&!config.allowInsecureVideoHttp)
+   throw new AppError(400,'拒绝明文 HTTP；必须使用 HTTPS');
+ const allowed=[config.providerUrl,...config.allowedProviderOrigins].map(v=>{try{return new URL(v).origin;}catch{return '';}});
+ if(!allowed.includes(url.origin))
+   throw new AppError(403,'该上游地址不在服务器允许列表中。请由平台管理员先配置 VIDEO_API_ALLOWED_ORIGINS');
+ return url.origin;
+}
+export async function getProviderBaseUrl():Promise<string>{
+ const row=(await query<{provider_base_url:string|null}>('SELECT provider_base_url FROM platform_settings WHERE id=1')).rows[0];
+ return row?.provider_base_url?validateProviderBaseUrl(row.provider_base_url):config.providerUrl;
+}
 export async function getGlobalProviderApiRoutes():Promise<ProviderApiRoutes>{
  const row=(await query<{provider_routes:ProviderApiRoutes|null}>(
    'SELECT provider_routes FROM platform_settings WHERE id=1')).rows[0];
@@ -86,11 +104,12 @@ export async function providerKey(orgId:string):Promise<string> {
   return key;
 }
 async function providerFetch(path:string,key:string,init:RequestInit={},timeout=30_000,authMode:'license_key'|'bearer'='license_key'):Promise<any> {
-  if(!config.providerUrl.startsWith('https://') && !config.allowInsecureVideoHttp)
+  const baseUrl=await getProviderBaseUrl();
+  if(!baseUrl.startsWith('https://')&&!config.allowInsecureVideoHttp)
     throw new AppError(503,'视频 API 只允许 HTTPS；如确需使用 HTTP，需显式配置 ALLOW_INSECURE_VIDEO_HTTP=true（不推荐）');
   let response:Response;
   try {
-    response=await fetch(`${config.providerUrl}${path}`,{...init,headers:{...(authMode==='bearer'?{Authorization:`Bearer ${key}`}:{'X-License-Key':key}),...init.headers},signal:AbortSignal.timeout(timeout),redirect:'error'});
+    response=await fetch(`${baseUrl}${path}`,{...init,headers:{...(authMode==='bearer'?{Authorization:`Bearer ${key}`}:{'X-License-Key':key}),...init.headers},signal:AbortSignal.timeout(timeout),redirect:'error'});
   } catch(error) {
     throw new ProviderError(error instanceof Error?`视频服务网络异常：${error.message}`:'视频服务网络异常',0,true);
   }
@@ -149,9 +168,9 @@ export async function submitVideo(job:StoredJob):Promise<Submission> {
   if(result?.status!=='success'||typeof result.task_id!=='string') throw new ProviderError('服务端未返回有效 task_id',200,true);
   return {taskId:result.task_id,requiredCredits:Number.isFinite(Number(result.required_credits))?Number(result.required_credits):null,billingStatus:result.billing_status??'reserved'};
 }
-function safeVideoUrl(url:unknown):string|null {
+function safeVideoUrl(url:unknown,baseUrl:string):string|null {
   if(typeof url!=='string'||!url)return null;
-  try {const u=new URL(url,config.providerUrl);return ['http:','https:'].includes(u.protocol)?u.toString():null;}catch{return null;}
+  try {const u=new URL(url,baseUrl);return ['http:','https:'].includes(u.protocol)?u.toString():null;}catch{return null;}
 }
 export async function pollVideo(job:StoredJob):Promise<PollResult> {
   if(config.mockProvider) {
@@ -163,11 +182,12 @@ export async function pollVideo(job:StoredJob):Promise<PollResult> {
   const key=await providerKey(job.org_id);
   const result=await providerFetch(taskRoute(endpoints.taskPath,job.provider_task_id??''),key,{},30_000,endpoints.authMode);
   const status=String(result.status??'').toLowerCase();
-  let videoUrl=safeVideoUrl(result.video_url??result.stable_video_url??result.mp4_url);
+  const baseUrl=await getProviderBaseUrl();
+  let videoUrl=safeVideoUrl(result.video_url??result.stable_video_url??result.mp4_url,baseUrl);
   if(status==='success'&&!videoUrl) {
     try {
       const fallback=await providerFetch(taskRoute(endpoints.videoLinkPath,job.provider_task_id??''),key,{},15_000,endpoints.authMode);
-      videoUrl=safeVideoUrl(fallback.video_url??fallback.stable_video_url??fallback.mp4_url??fallback.url);
+      videoUrl=safeVideoUrl(fallback.video_url??fallback.stable_video_url??fallback.mp4_url??fallback.url,baseUrl);
     }catch{/* provider may delay link publication */}
   }
   const normalized=status==='failed'?'failed':status==='success' && videoUrl?'success':status==='pending'?'pending':'polling';
