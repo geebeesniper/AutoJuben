@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import type { ProviderApiRoutes } from '../provider/client.js';
 /** Admin repositories deliberately do not authorize; all callers MUST pass through admin service. */
 const escapeLike=(x:string)=>x.replace(/[\\%_]/g,'\\$&');
 export async function findUsers(search:string,limit:number,offset:number){
@@ -44,6 +45,15 @@ export async function setBillingFlags(paymentsEnabled:boolean,usageBillingEnable
 export async function updateStripeSettings(columns:string[],values:unknown[],userId:string){
   // columns are created ONLY in admin service from fixed literals, never user-provided identifiers.
   await query(`UPDATE platform_settings SET ${columns.join(',')},updated_by=$${values.length+1},updated_at=now() WHERE id=1`,[...values,userId]);
+}
+/** Protect all queued, submitting, unknown and polling jobs from endpoint changes. */
+export async function anyProviderJobsInFlight():Promise<boolean>{
+ return Boolean((await query<{busy:boolean}>(`SELECT EXISTS(
+  SELECT 1 FROM video_jobs WHERE status IN ('queued','submitting','submission_unknown','pending','polling')
+ ) AS busy`)).rows[0]?.busy);
+}
+export async function saveGlobalProviderRoutes(routes:ProviderApiRoutes,actorId:string){
+ await query('UPDATE platform_settings SET provider_routes=$1::jsonb,updated_by=$2,updated_at=NOW() WHERE id=1',[JSON.stringify(routes),actorId]);
 }
 export async function updateGlobalVideoKey(ciphertext:string|null,userId:string){
   await query('UPDATE platform_settings SET provider_key_ciphertext=$1,updated_by=$2,updated_at=now() WHERE id=1',[ciphertext,userId]);
