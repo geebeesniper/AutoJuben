@@ -106,6 +106,8 @@ export const coreServiceMutations = {
   saveProviderKey:async (_root:unknown,{orgId,key}:any,ctx:Context)=>{
     const u=await actor(ctx);await requireMembership(u,orgId,manageRoles);
     const trimmed=String(key??'').trim();assert(trimmed.length<=1024,'卡密过长');
+    assert(!(await hasInFlightVideoJobs(orgId)),
+      '当前工作区仍有处理中或状态未知的视频任务；不能更换 API 密钥',409);
     await storeProviderKey(orgId,trimmed?encryptSecret(trimmed):null);
     await appendAudit(orgId,u.id,trimmed?'provider.keyConfigured':'provider.keyCleared');return true;
   },
