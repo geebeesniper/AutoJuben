@@ -21,7 +21,7 @@ export const coreTypeDefs=/* GraphQL */`
     taskPath: String! videoLinkPath: String! authMode: String!
   }
   type ProviderInfo {
-    mock: Boolean! pricing: String! settings: String! baseUrl: String! hasKey: Boolean!
+    mock: Boolean! pricing: String! settings: String! baseUrl: String! hasKey: Boolean! connectionError: String
     endpoints: ProviderApiRoutes!
   }
   type VideoJob {
