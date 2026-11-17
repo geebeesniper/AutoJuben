@@ -44,7 +44,12 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
     }catch(e){setProvider(null);setProviderFailure(e instanceof Error?e.message:'接口配置读取失败');}
     finally{setProviderLoading(false);}
   }
-  useEffect(()=>{setStep(0);setProvider(null);void refreshProvider();},[org.id]);
+  useEffect(()=>{
+    setStep(0);setProvider(null);setPrompt('');setProjectId('');setModel('xinghe-2.0');
+    setRatio('9:16');setDuration(15);setResolution('720p');
+    setMediaUrls({image:'',audio:'',video:''});setUploads({image:[],audio:[],video:[]});
+    taskId.current=crypto.randomUUID();void refreshProvider();
+  },[org.id]);
   const knownModels=useMemo(()=>provider?parseModelList(provider.settings):null,[provider?.settings]);
 
   const configured=Boolean(provider&&!provider.mock&&provider.hasKey&&!provider.connectionError&&!providerFailure);
@@ -90,11 +95,13 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
     if(!files?.length)return;
     const limit=mediaTypes.find(m=>m.kind===kind)!.max;
     if(files.length+lines(mediaUrls[kind]).length+uploads[kind].length>limit){onNotify(`${kind} 素材超出上限 ${limit} 个`);return;}
+    const uploadingOrg=org.id;
     setUploading(kind);
     try{
       for(const file of Array.from(files)){
         const item=await uploadAsset(org.id,file);
         if(item.kind!==kind)throw new Error('文件类型与素材栏目不一致');
+        if(uploadingOrg!==org.id)return;
         setUploads(prev=>({...prev,[kind]:[...prev[kind],item]}));
       }
       onNotify('文件上传成功',true);
