@@ -39,7 +39,7 @@ export const coreServiceQueries = {
   providerInfo:async (_root:unknown,{orgId}:any,ctx:Context)=>{
     await requireMembership(ctx.user,orgId);const info=await providerInfo(orgId);
     const global=await platformSettings();
-    return {...info,baseUrl:config.providerUrl,hasKey:await hasProviderKey(orgId)||Boolean(global.provider_key_ciphertext||config.providerKey)};
+    return {...info,baseUrl:await getProviderBaseUrl(),hasKey:await hasProviderKey(orgId)||Boolean(global.provider_key_ciphertext||config.providerKey)};
   },
   auditLogs:async (_root:unknown,{orgId,limit}:any,ctx:Context)=>{
     await requireMembership(ctx.user,orgId,manageRoles);
