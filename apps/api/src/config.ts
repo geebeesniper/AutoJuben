@@ -11,6 +11,7 @@ export const config = {
   maxUploadBytes: Math.max(1,Math.min(50,Number(process.env.MAX_UPLOAD_MB ?? 45))) * 1024 * 1024,
   activeJobsLimit: Math.max(1,Number(process.env.MAX_ACTIVE_JOBS_PER_ORG ?? 3)),
   providerUrl: (process.env.VIDEO_API_BASE_URL ?? 'http://113.207.49.151:8045').replace(/\/$/, ''),
+  allowedProviderOrigins: (process.env.VIDEO_API_ALLOWED_ORIGINS ?? '').split(',').map(v=>v.trim()).filter(Boolean),
   providerKey: process.env.VIDEO_API_LICENSE_KEY ?? '',
   encryptionKey: process.env.ENCRYPTION_KEY ?? '',
   mockProvider: process.env.MOCK_VIDEO_PROVIDER === 'true',
