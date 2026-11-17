@@ -300,6 +300,10 @@ export const adminServiceMutations={
  },
  adminSaveGlobalVideoKey:async (_:unknown,{key}:{key:string},ctx:Context)=>{
   const u=(await asAdmin(ctx,'secrets')).user;assert(key.length<=1024,'视频 API 密钥过长');
-  await updateGlobalVideoKey(key?encryptSecret(key):null,u.id);return apiInfo();
+  assert(!(await anyProviderJobsInFlight()),
+    '仍有处理中或状态未知的视频任务；不能更改全平台默认密钥',409);
+  await updateGlobalVideoKey(key?encryptSecret(key):null,u.id);
+  await adminAudit(u.id,'provider.defaultKeyUpdated','platform','global',{configured:Boolean(key)});
+  return apiInfo();
  }
 };
