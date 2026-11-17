@@ -130,6 +130,7 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
  const [info,setInfo]=useState<ApiInfo|null>(null),[role,setRole]=useState<RoleInfo|null>(null);
  const [routes,setRoutes]=useState<ProviderRoutes>(defaultRoutes),[key,setKey]=useState(''),[baseUrl,setBaseUrl]=useState('');
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(''),[show,setShow]=useState(false),[error,setError]=useState('');
+ const [testResult,setTestResult]=useState<{ok:boolean;message:string;time:string}|null>(null);
  const canEdit=role?.capabilities.includes('secrets')??false;
  const routeFields:{field:keyof Omit<ProviderRoutes,'authMode'>;method:string;label:string}[]=[
    {field:'pricingPath',method:'GET',label:'Pricing · 价格查询'},
@@ -179,6 +180,7 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
   try{
    const r=await gql<{adminTestVideoApi:{ok:boolean;message:string}}>(`query{adminTestVideoApi{ok message}}`);
    onNotify(r.adminTestVideoApi.message,r.adminTestVideoApi.ok);
+   setTestResult({ok:r.adminTestVideoApi.ok,message:r.adminTestVideoApi.message,time:new Date().toLocaleString()});
    if(!r.adminTestVideoApi.ok)setError(r.adminTestVideoApi.message);
    else setError('');
   }catch(e){setError(e instanceof Error?e.message:'连接测试失败');}
@@ -189,7 +191,7 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
   <section className="panel portal-card">
    <div className="portal-card-heading"><CloudCog size={22}/><h2>上游视频服务 · 全局配置</h2><button className="btn btn-ghost" disabled={loading||!!busy} onClick={()=>void load()}><RefreshCw size={15}/>刷新</button></div>
    <div className="admin-api-status-grid">
-    <div><small>运行模式</small><b>{!info?'尚未连接':info.mock?'MOCK — 不请求真实 API':'LIVE — 连接真实服务'}</b></div>
+    <div><small>运行模式</small><b>{!info?'尚未连接':info.mock?'MOCK — 不请求真实 API':info.globalKeyConfigured?'LIVE 已启用 · 待连接测试':'LIVE 已启用 · 缺少默认密钥'}</b></div>
     <div><small>默认凭据</small><b>{info?.globalKeyConfigured?'已配置（不显示明文）':'未配置'}</b></div>
     <div><small>管理员权限</small><b>{role?.role??'读取中'} · {canEdit?'可编辑':'只读'}</b></div>
    </div>
@@ -237,7 +239,8 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
     <p className="portal-help">测试时调用服务器实际的 Pricing GET 和 Public Settings GET，使用已保存的路径与鉴权方式。不创建视频任务、不触发收费。</p>
     {info?.mock&&<div className="notice"><ShieldAlert size={16}/>MOCK_VIDEO_PROVIDER=true；真实测试不可执行。必须在 Vercel 改成 LIVE 才能发起真实请求。</div>}
     {info?.baseUrl.startsWith('http://')&&!info.mock&&<div className="notice danger"><ShieldAlert size={16}/>当前基础地址使用 HTTP。除非服务器明确允许，否则不会发送任何 API 密钥。</div>}
-    <div className="portal-btn-row"><button className="btn btn-primary" disabled={!!busy||loading||!info||dirty||info.mock||!info.globalKeyConfigured} onClick={()=>void test()}><Activity size={16}/>{busy==='test'?'测试中…':'测试实际 API 连接'}</button></div>
+    <div className="portal-btn-row"><button className="btn btn-primary" disabled={!!busy||loading||!info||dirty||baseUrl!==info.baseUrl||info.mock||!info.globalKeyConfigured} onClick={()=>void test()}><Activity size={16}/>{busy==='test'?'测试中…':'测试实际 API 连接'}</button></div>
+    {testResult&&<div className={testResult.ok?'notice success':'notice danger'} role="status"><b>{testResult.ok?'PASS':'FAIL'} · {testResult.time}</b><p>{testResult.message}</p></div>}
    </section>
   </div>
  </>;
