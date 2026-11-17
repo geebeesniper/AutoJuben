@@ -128,7 +128,7 @@ function GatewayPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
 }
 function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
  const [info,setInfo]=useState<ApiInfo|null>(null),[role,setRole]=useState<RoleInfo|null>(null);
- const [routes,setRoutes]=useState<ProviderRoutes>(defaultRoutes),[key,setKey]=useState('');
+ const [routes,setRoutes]=useState<ProviderRoutes>(defaultRoutes),[key,setKey]=useState(''),[baseUrl,setBaseUrl]=useState('');
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(''),[show,setShow]=useState(false),[error,setError]=useState('');
  const canEdit=role?.capabilities.includes('secrets')??false;
  const routeFields:{field:keyof Omit<ProviderRoutes,'authMode'>;method:string;label:string}[]=[
@@ -143,7 +143,7 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
   setLoading(true);
   try{
    const r=await gql<{adminApiSettings:ApiInfo;adminMyRole:RoleInfo}>(`query{adminApiSettings{baseUrl mock globalKeyConfigured endpointEditableInVercel routes{pricingPath settingsPath submitPath taskPath videoLinkPath authMode}} adminMyRole{role capabilities}}`);
-   setInfo(r.adminApiSettings);setRole(r.adminMyRole);setRoutes(r.adminApiSettings.routes);setError('');
+   setInfo(r.adminApiSettings);setRole(r.adminMyRole);setRoutes(r.adminApiSettings.routes);setBaseUrl(r.adminApiSettings.baseUrl);setError('');
   }catch(e){setError(e instanceof Error?e.message:'API 集成配置读取失败');}
   finally{setLoading(false);}
  }
@@ -154,6 +154,15 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
   try{await gql(`mutation($key:String!){adminSaveGlobalVideoKey(key:$key){globalKeyConfigured}}`,{key});
    setKey('');onNotify('全平台默认 API 密钥已加密保存',true);await load();
   }catch(e){setError(e instanceof Error?e.message:'API Key 保存失败');}
+  finally{setBusy('');}
+ }
+ async function saveBaseUrl(){
+  if(!canEdit||!baseUrl.trim())return;
+  setBusy('origin');
+  try{
+   await gql(`mutation($baseUrl:String!){adminSaveGlobalProviderBaseUrl(baseUrl:$baseUrl){baseUrl}}`,{baseUrl:baseUrl.trim()});
+   onNotify('基础地址已保存到数据库，并记录变更审计',true);await load();
+  }catch(e){setError(e instanceof Error?e.message:'基础地址保存失败');}
   finally{setBusy('');}
  }
  async function saveRoutes(){
@@ -184,8 +193,15 @@ function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
     <div><small>默认凭据</small><b>{info?.globalKeyConfigured?'已配置（不显示明文）':'未配置'}</b></div>
     <div><small>管理员权限</small><b>{role?.role??'读取中'} · {canEdit?'可编辑':'只读'}</b></div>
    </div>
-   <div className="portal-info-row"><span>API Base URL（Vercel 服务器配置）</span><code>{info?.baseUrl??'正在读取…'}</code></div>
-   <p className="portal-help">基础域名仍由服务器的 VIDEO_API_BASE_URL 控制，禁止在网页填入任意主机以免泄漏密钥。下方五个路径及鉴权 Header 可以直接保存至数据库。</p>
+   <div className="admin-api-routes"><label className="admin-api-origin"><span><b>上游 API Base URL</b><small>HOST</small></span>
+    <input type="url" value={baseUrl} spellCheck={false} autoComplete="off" disabled={!canEdit||loading||!!busy}
+      onChange={e=>setBaseUrl(e.target.value)} placeholder="https://video-provider.example.com" />
+   </label></div>
+   <p className="portal-help">基础地址支持后台修改并写入数据库，但只允许 HTTPS 且必须在服务器 VIDEO_API_ALLOWED_ORIGINS 预批准；默认由 VIDEO_API_BASE_URL 指定。不允许任意地址携带卡密访问内网。更改期间必须没有正在生成或状态未知的视频任务。</p>
+   <div className="portal-btn-row">
+     <button className="btn btn-ghost" type="button" disabled={!info||baseUrl===info.baseUrl||!!busy} onClick={()=>setBaseUrl(info?.baseUrl??'')}>取消基础地址修改</button>
+     <button className="btn btn-primary" type="button" disabled={!canEdit||!info||!baseUrl.trim()||baseUrl===info.baseUrl||!!busy} onClick={()=>void saveBaseUrl()}><Save size={15}/>{busy==='origin'?'保存中…':'保存基础地址'}</button>
+   </div>
    <div className="portal-divider"/>
    <div className="portal-card-heading"><ServerCog size={20}/><h2>接口定义 · 151 API</h2><span className="portal-status pending">{dirty?'有未保存修改':'与数据库一致'}</span></div>
    <div className="admin-api-routes">
