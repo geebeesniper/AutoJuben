@@ -63,6 +63,8 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
   const [uploads,setUploads]=useState<Record<Kind,UploadedAsset[]>>({image:[],audio:[],video:[]});
   const [busy,setBusy]=useState(false);const [uploading,setUploading]=useState<Kind|null>(null);
   const taskId=useRef(crypto.randomUUID());
+  const currentOrg=useRef(org.id);
+  currentOrg.current=org.id;
   const totalMedia=Object.values(mediaUrls).reduce((n,s)=>n+lines(s).length,0)+Object.values(uploads).reduce((n,files)=>n+files.length,0);
   const imageCount=lines(mediaUrls.image).length+uploads.image.length;
   const audioCount=lines(mediaUrls.audio).length+uploads.audio.length;
@@ -101,7 +103,7 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
       for(const file of Array.from(files)){
         const item=await uploadAsset(org.id,file);
         if(item.kind!==kind)throw new Error('文件类型与素材栏目不一致');
-        if(uploadingOrg!==org.id)return;
+        if(uploadingOrg!==currentOrg.current)return;
         setUploads(prev=>({...prev,[kind]:[...prev[kind],item]}));
       }
       onNotify('文件上传成功',true);
