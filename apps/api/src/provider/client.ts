@@ -102,16 +102,22 @@ async function providerFetch(path:string,key:string,init:RequestInit={},timeout=
   }
   return parsed;
 }
-export async function providerInfo(orgId:string):Promise<{mock:boolean;pricing:string;settings:string;endpoints:ProviderApiRoutes}> {
+export async function providerInfo(orgId:string):Promise<{mock:boolean;pricing:string;settings:string;endpoints:ProviderApiRoutes;connectionError:string|null}> {
   const endpoints=await getProviderApiRoutes(orgId);
-  if(config.mockProvider) return {mock:true,pricing:'{"demo":true,"notice":"Mock mode: zero real credits consumed"}',settings:'{"models":["xinghe-2.0","xinghe-fast"]}',endpoints};
-  const key=await providerKey(orgId);
+  if(config.mockProvider)return {mock:true,pricing:'{"demo":true,"notice":"No real pricing or charges in mock mode"}',settings:'{"demo":true,"models":["xinghe-2.0","xinghe-fast"]}',endpoints,connectionError:'MOCK_VIDEO_PROVIDER=true'};
+  let key:string;
+  try{key=await providerKey(orgId);}
+  catch(err){
+    const message=err instanceof Error?err.message:'没有可用的 API Key';
+    return {mock:false,pricing:JSON.stringify({error:message}),settings:JSON.stringify({error:message}),endpoints,connectionError:message};
+  }
   const [price,settings]=await Promise.allSettled([
-    providerFetch(endpoints.pricingPath,key,{},10_000,endpoints.authMode),
-    providerFetch(endpoints.settingsPath,key,{},10_000,endpoints.authMode)
+    providerFetch(endpoints.pricingPath,key,{},10000,endpoints.authMode),
+    providerFetch(endpoints.settingsPath,key,{},10000,endpoints.authMode)
   ]);
-  const asText=(x:PromiseSettledResult<unknown>)=> x.status==='fulfilled' ? JSON.stringify(x.value,null,2) : JSON.stringify({error:x.reason instanceof Error?x.reason.message:'unknown'});
-  return {mock:false,pricing:asText(price),settings:asText(settings),endpoints};
+  const asText=(x:PromiseSettledResult<unknown>)=>x.status==='fulfilled'?JSON.stringify(x.value,null,2):JSON.stringify({error:x.reason instanceof Error?x.reason.message:'unknown'});
+  const failures=[price,settings].filter(x=>x.status==='rejected').map(x=>x.status==='rejected'&&x.reason instanceof Error?x.reason.message:'API request failed');
+  return {mock:false,pricing:asText(price),settings:asText(settings),endpoints,connectionError:failures.length?failures.join(' · ').slice(0,250):null};
 }
 async function loadAssets(job:StoredJob):Promise<ProviderAsset[]> {
   const ids=[...job.image_asset_ids,...job.audio_asset_ids,...job.video_asset_ids];
