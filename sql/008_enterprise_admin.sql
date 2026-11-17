@@ -1,6 +1,12 @@
 -- AutoJuben enterprise operations schema 008. Append-only evolution.
 -- Requires 001..005. REVIEW + BACKUP BEFORE APPLYING IN A REAL DATABASE.
 -- Not deployed; account-wide admin actions must be authenticated on the server.
+-- Global provider API route defaults are editable by super admin and persisted on the existing platform settings owner.
+-- Workspace-specific overrides in SQL 007 take precedence. SQL 004 remains protected/frozen.
+ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS provider_routes JSONB;
+ALTER TABLE public.platform_settings ADD CONSTRAINT platform_provider_routes_is_object
+  CHECK(provider_routes IS NULL OR jsonb_typeof(provider_routes)='object');
+
 CREATE TABLE IF NOT EXISTS public.platform_admin_staff (
  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
  role TEXT NOT NULL CHECK(role IN ('operations_manager','finance_manager','support_lead','analyst','auditor')),
