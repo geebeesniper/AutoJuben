@@ -3,12 +3,13 @@ import { findUsers,findOrders,allProducts,allTariffs,findUserEmail,setUserDisabl
   upsertProduct,upsertTariff,deleteTariff,hasActiveProduct,hasActiveTariff,setBillingFlags,
   updateStripeSettings,updateGlobalVideoKey,
   adminStaffRole,adminStaffList,adminSetStaffRole,adminAudit,adminLedgerRows,
-  adminInvestigationRows,adminThreads,adminThreadMessages,adminCreateThread,adminPostMessage,adminChangeThread,adminOverviewRows } from '../repositories/admin.repository.js';
+  adminInvestigationRows,adminThreads,adminThreadMessages,adminCreateThread,adminPostMessage,adminChangeThread,adminOverviewRows,anyProviderJobsInFlight,saveGlobalProviderRoutes } from '../repositories/admin.repository.js';
 import { isoDate,billingProductView,adminOrderView } from '../models/view-models.js';
 import { encryptSecret } from '../auth/security.js';
 import { config } from '../config.js';
 import { stripeClient } from '../billing/stripe.js';
 import { decryptSecret } from '../auth/security.js';
+import { getGlobalProviderApiRoutes,testGlobalProviderConnection,validateProviderApiRoutes,type ProviderApiRoutes } from '../provider/client.js';
 import { assert } from '../utils/errors.js';
 import { isPlatformAdmin,platformSettings,stripeCredentials } from '../billing/common.js';
 import type { Context } from '../models/context.js';
@@ -60,8 +61,10 @@ async function billingInfo(){
   webhookUrl:`${config.origin}/api/stripe`};
 }
 async function apiInfo(){
- const s=await platformSettings();return {baseUrl:config.providerUrl,mock:config.mockProvider,
-  globalKeyConfigured:Boolean(s.provider_key_ciphertext||config.providerKey),endpointEditableInVercel:true};
+ const [s,routes]=await Promise.all([platformSettings(),getGlobalProviderApiRoutes()]);
+ return {baseUrl:config.providerUrl,mock:config.mockProvider,
+  globalKeyConfigured:Boolean(s.provider_key_ciphertext||config.providerKey),endpointEditableInVercel:true,
+  routes};
 }
 export const adminServiceQueries={
  adminOverview:async (_:unknown,args:{from:string;to:string;timezone:string;unit:string},ctx:Context)=>{
@@ -177,13 +180,7 @@ export const adminServiceQueries={
  },
  adminTestVideoApi:async (_:unknown,_a:unknown,ctx:Context)=>{
   await asAdmin(ctx,'operations');
-  if(config.mockProvider)return {ok:true,message:'当前为 MOCK 演示模式，没有请求真实视频 API。'};
-  const s=await platformSettings();const key=s.provider_key_ciphertext?decryptSecret(s.provider_key_ciphertext):config.providerKey;
-  if(!key)return {ok:false,message:'尚未配置默认视频 API 密钥'};
-  if(!config.providerUrl.startsWith('https://')&&!config.allowInsecureVideoHttp)return {ok:false,message:'上游地址不是 HTTPS，禁止发送卡密；仅受控测试可设置 ALLOW_INSECURE_VIDEO_HTTP=true'};
-  try{const response=await fetch(config.providerUrl+'/api/pricing',{headers:{'X-License-Key':key},signal:AbortSignal.timeout(8000)});
-   return {ok:response.ok,message:response.ok?'视频服务定价接口响应正常':`视频接口返回 HTTP ${response.status}`};}
-  catch{return {ok:false,message:'网络连接失败或请求超时'};}
+  return testGlobalProviderConnection();
  }
 };
 export const adminServiceMutations={
@@ -282,6 +279,15 @@ export const adminServiceMutations={
   assert(columns.length>0,'没有需要保存的配置');
   await updateStripeSettings(columns,values,u.id);
   return billingInfo();
+ },
+ adminSaveGlobalApiRoutes:async (_:unknown,{input}:{input:ProviderApiRoutes},ctx:Context)=>{
+  const admin=await asAdmin(ctx,'secrets');
+  const safe=validateProviderApiRoutes(input);
+  assert(!(await anyProviderJobsInFlight()),
+    '平台仍有未完成或状态未知的视频任务；为避免任务丢失，请先处理这些任务再更改全局接口',409);
+  await saveGlobalProviderRoutes(safe,admin.user.id);
+  await adminAudit(admin.user.id,'provider.routesUpdated','platform','global',{routes:safe});
+  return apiInfo();
  },
  adminSaveGlobalVideoKey:async (_:unknown,{key}:{key:string},ctx:Context)=>{
   const u=(await asAdmin(ctx,'secrets')).user;assert(key.length<=1024,'视频 API 密钥过长');
