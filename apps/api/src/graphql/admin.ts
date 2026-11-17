@@ -2,7 +2,7 @@ export const adminTypeDefs=/* GraphQL */`
  type AdminUser { id: ID! name: String! email: String! disabled: Boolean! orgCount: Int! orders: Int! createdAt: String! }
  type AdminOrder { id: ID! orgId: ID! orgName: String! userId: ID! userName: String! email: String! productName: String! credits: Int! amountCents: Int! currency: String! status: String! refundedAmountCents: Int! refundedCredits: Int! stripeSessionId: String createdAt: String! paidAt: String }
  type AdminBillingSettings { paymentsEnabled: Boolean! usageBillingEnabled: Boolean! stripeSecretConfigured: Boolean! webhookSecretConfigured: Boolean! portalConfigured: Boolean! stripeMode: String! webhookUrl: String! }
- type AdminApiSettings { baseUrl: String! mock: Boolean! globalKeyConfigured: Boolean! endpointEditableInVercel: Boolean! }
+ type AdminApiSettings { baseUrl: String! mock: Boolean! globalKeyConfigured: Boolean! endpointEditableInVercel: Boolean! routes: ProviderApiRoutes! }
  type VideoTariff { model: String! resolution: String! credits: Int! active: Boolean! }
  type AdminConnectionTest { ok: Boolean! message: String! }
  type AdminOperationsTrendBucket {
@@ -57,6 +57,7 @@ export const adminTypeDefs=/* GraphQL */`
   adminSetBillingFlags(paymentsEnabled: Boolean!,usageBillingEnabled: Boolean!): AdminBillingSettings!
   adminSaveStripeIntegration(secretKey: String,webhookSecret: String,portalConfig: String): AdminBillingSettings!
   adminSaveGlobalVideoKey(key: String!): AdminApiSettings!
+  adminSaveGlobalApiRoutes(input: ProviderApiRoutesInput!): AdminApiSettings!
  }
 `;
 export { adminQueries, adminMutations } from '../controllers/admin.controller.js';
