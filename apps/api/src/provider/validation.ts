@@ -32,7 +32,9 @@ function strings(list:unknown,max:number,label:string):string[] {
 }
 export function validateVideoInput(data:VideoInput):Required<Omit<VideoInput,'projectId'|'clientTaskId'>> & Pick<VideoInput,'projectId'|'clientTaskId'> {
   assert(data && typeof data.prompt==='string' && data.prompt.trim().length>=5 && data.prompt.length<=5000,'提示词需要 5–5000 字符');
-  assert(['xinghe-2.0','xinghe-fast'].includes(data.model),'不支持的视频模型');
+  // Provider models are discovered via /api/public-settings, not permanently hard-coded here.
+  // Validate an opaque safe model identifier; upstream activation and optional tariff checks are independent.
+  assert(typeof data.model==='string' && /^[a-z0-9][a-z0-9._-]{1,79}$/i.test(data.model),'视频模型 ID 格式无效');
   assert(Number.isInteger(data.duration) && data.duration>=4&&data.duration<=15,'时长必须是 4–15 秒');
   assert(['9:16','16:9'].includes(data.ratio),'比例必须是 9:16 或 16:9');
   assert(data.model==='xinghe-fast' ? data.resolution==='480p' : ['480p','720p','1080p','4k'].includes(data.resolution),'模型不支持该分辨率');

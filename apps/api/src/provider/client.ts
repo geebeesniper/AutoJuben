@@ -17,6 +17,82 @@ export type PollResult = {status:'pending'|'polling'|'success'|'failed'; progres
 export class ProviderError extends Error {
   constructor(message:string,public status:number,public ambiguous=false){super(message);}
 }
+/** Endpoint defaults match 151_9tu_api_integration.md v1.0. Routes are DATA, never code. */
+export type ProviderApiRoutes={
+  pricingPath:string;settingsPath:string;submitPath:string;taskPath:string;videoLinkPath:string;
+  authMode:'license_key'|'bearer';
+};
+export const defaultProviderApiRoutes:ProviderApiRoutes={
+  pricingPath:'/api/pricing',settingsPath:'/api/public-settings',submitPath:'/api/generate-video',
+  taskPath:'/api/task/{task_id}',videoLinkPath:'/api/task/{task_id}/video-link',authMode:'license_key'
+};
+export function validateProviderApiRoutes(candidate:ProviderApiRoutes):ProviderApiRoutes {
+  const staticRoute=/^\/api(?:\/[a-zA-Z0-9_-]+)+$/;
+  const dynamicRoute=/^\/api(?:\/[a-zA-Z0-9_-]+)*\/\{task_id\}(?:\/[a-zA-Z0-9_-]+)*$/;
+  for(const key of ['pricingPath','settingsPath','submitPath','taskPath','videoLinkPath'] as const) {
+    const route=candidate[key];
+    const dynamic=key==='taskPath'||key==='videoLinkPath';
+    if(typeof route!=='string'||route.length>160||!(dynamic?dynamicRoute:staticRoute).test(route))
+      throw new AppError(400,`无效 API 路径 ${key}：必须为 /api/... ${dynamic?'且必须包含 {task_id}':''}`);
+  }
+  if(!['license_key','bearer'].includes(candidate.authMode))throw new AppError(400,'不支持的 API 鉴权方式');
+  return candidate;
+}
+/** Only server-preapproved provider origins may receive bearer/license credentials. */
+export function validateProviderBaseUrl(value:string):string{
+ let url:URL;
+ try{url=new URL(value);}catch{throw new AppError(400,'基础地址必须是完整的 HTTPS URL');}
+ if(url.username||url.password||url.search||url.hash||url.pathname!=='/'||
+    (url.protocol!=='https:'&&url.protocol!=='http:'))
+   throw new AppError(400,'基础地址只能包含 HTTPS 主机及端口，不可包含凭据、路径或查询参数');
+ if(url.protocol!=='https:'&&!config.allowInsecureVideoHttp)
+   throw new AppError(400,'拒绝明文 HTTP；必须使用 HTTPS');
+ const allowed=[config.providerUrl,...config.allowedProviderOrigins].map(v=>{try{return new URL(v).origin;}catch{return '';}});
+ if(!allowed.includes(url.origin))
+   throw new AppError(403,'该上游地址不在服务器允许列表中。请由平台管理员先配置 VIDEO_API_ALLOWED_ORIGINS');
+ return url.origin;
+}
+export async function getProviderBaseUrl():Promise<string>{
+ const row=(await query<{provider_base_url:string|null}>('SELECT provider_base_url FROM platform_settings WHERE id=1')).rows[0];
+ return row?.provider_base_url?validateProviderBaseUrl(row.provider_base_url):config.providerUrl;
+}
+export async function getGlobalProviderApiRoutes():Promise<ProviderApiRoutes>{
+ const row=(await query<{provider_routes:ProviderApiRoutes|null}>(
+   'SELECT provider_routes FROM platform_settings WHERE id=1')).rows[0];
+ return row?.provider_routes?validateProviderApiRoutes(row.provider_routes):{...defaultProviderApiRoutes};
+}
+/** A tenant may override global paths. All provider operations share the same effective routes. */
+export async function getProviderApiRoutes(orgId:string):Promise<ProviderApiRoutes> {
+  const row=(await query<{
+    pricing_path:string;settings_path:string;submit_path:string;task_path:string;video_link_path:string;auth_mode:'license_key'|'bearer';
+  }>('SELECT pricing_path,settings_path,submit_path,task_path,video_link_path,auth_mode FROM provider_api_routes WHERE org_id=$1',[orgId])).rows[0];
+  if(!row)return getGlobalProviderApiRoutes();
+  return validateProviderApiRoutes({
+    pricingPath:row.pricing_path,settingsPath:row.settings_path,submitPath:row.submit_path,
+    taskPath:row.task_path,videoLinkPath:row.video_link_path,authMode:row.auth_mode
+  });
+}
+/** Read-only GET probe: reuses the actual provider HTTP client and header/redirect rules. */
+export async function testGlobalProviderConnection():Promise<{ok:boolean;message:string}>{
+ if(config.mockProvider)return {ok:false,message:'当前 MOCK_VIDEO_PROVIDER=true：没有请求真实 API。请在 Vercel 环境变量改为 false 后重新测试。'};
+ const global=await getGlobalProviderApiRoutes();
+ const settings=await platformSettings();
+ const key=settings.provider_key_ciphertext?decryptSecret(settings.provider_key_ciphertext):config.providerKey;
+ if(!key)return {ok:false,message:'没有全平台默认 API Key，请先在 API 集成中心保存。'};
+ try{
+  const [pricing,models]=await Promise.all([
+   providerFetch(global.pricingPath,key,{},10000,global.authMode),
+   providerFetch(global.settingsPath,key,{},10000,global.authMode)
+  ]);
+  return {ok:true,message:'真实 API 请求成功：Pricing 与 Public Settings 均返回可解析的 JSON。'};
+ }catch(err){
+  return {ok:false,message:err instanceof Error?err.message.slice(0,180):'视频 API 连接失败'};
+ }
+}
+function taskRoute(template:string,taskId:string):string {
+  if(!taskId||taskId.length>160)throw new AppError(400,'视频任务 ID 无效');
+  return template.replace('{task_id}',encodeURIComponent(taskId));
+}
 export async function providerKey(orgId:string):Promise<string> {
   if(config.mockProvider) return 'DEMO-NO-REAL-REQUEST';
   const r=await query<{provider_license_ciphertext:string|null}>('SELECT provider_license_ciphertext FROM organizations WHERE id=$1',[orgId]);
@@ -27,12 +103,13 @@ export async function providerKey(orgId:string):Promise<string> {
   if(!key) throw new AppError(422,'请在设置中填写视频服务卡密，或由管理员配置 VIDEO_API_LICENSE_KEY');
   return key;
 }
-async function providerFetch(path:string,key:string,init:RequestInit={},timeout=30_000):Promise<any> {
-  if(!config.providerUrl.startsWith('https://') && !config.allowInsecureVideoHttp)
+async function providerFetch(path:string,key:string,init:RequestInit={},timeout=30_000,authMode:'license_key'|'bearer'='license_key'):Promise<any> {
+  const baseUrl=await getProviderBaseUrl();
+  if(!baseUrl.startsWith('https://')&&!config.allowInsecureVideoHttp)
     throw new AppError(503,'视频 API 只允许 HTTPS；如确需使用 HTTP，需显式配置 ALLOW_INSECURE_VIDEO_HTTP=true（不推荐）');
   let response:Response;
   try {
-    response=await fetch(`${config.providerUrl}${path}`,{...init,headers:{'X-License-Key':key,...init.headers},signal:AbortSignal.timeout(timeout),redirect:'follow'});
+    response=await fetch(`${baseUrl}${path}`,{...init,headers:{...(authMode==='bearer'?{Authorization:`Bearer ${key}`}:{'X-License-Key':key}),...init.headers},signal:AbortSignal.timeout(timeout),redirect:'error'});
   } catch(error) {
     throw new ProviderError(error instanceof Error?`视频服务网络异常：${error.message}`:'视频服务网络异常',0,true);
   }
@@ -44,15 +121,22 @@ async function providerFetch(path:string,key:string,init:RequestInit={},timeout=
   }
   return parsed;
 }
-export async function providerInfo(orgId:string):Promise<{mock:boolean;pricing:string;settings:string}> {
-  if(config.mockProvider) return {mock:true,pricing:'{"demo":true,"notice":"Mock mode: zero real credits consumed"}',settings:'{"models":["xinghe-2.0","xinghe-fast"]}'};
-  const key=await providerKey(orgId);
+export async function providerInfo(orgId:string):Promise<{mock:boolean;pricing:string;settings:string;endpoints:ProviderApiRoutes;connectionError:string|null}> {
+  const endpoints=await getProviderApiRoutes(orgId);
+  if(config.mockProvider)return {mock:true,pricing:'{"demo":true,"notice":"No real pricing or charges in mock mode"}',settings:'{"demo":true,"models":["xinghe-2.0","xinghe-fast"]}',endpoints,connectionError:'MOCK_VIDEO_PROVIDER=true'};
+  let key:string;
+  try{key=await providerKey(orgId);}
+  catch(err){
+    const message=err instanceof Error?err.message:'没有可用的 API Key';
+    return {mock:false,pricing:JSON.stringify({error:message}),settings:JSON.stringify({error:message}),endpoints,connectionError:message};
+  }
   const [price,settings]=await Promise.allSettled([
-    providerFetch('/api/pricing',key,{},10_000),
-    providerFetch('/api/public-settings',key,{},10_000)
+    providerFetch(endpoints.pricingPath,key,{},10000,endpoints.authMode),
+    providerFetch(endpoints.settingsPath,key,{},10000,endpoints.authMode)
   ]);
-  const asText=(x:PromiseSettledResult<unknown>)=> x.status==='fulfilled' ? JSON.stringify(x.value,null,2) : JSON.stringify({error:x.reason instanceof Error?x.reason.message:'unknown'});
-  return {mock:false,pricing:asText(price),settings:asText(settings)};
+  const asText=(x:PromiseSettledResult<unknown>)=>x.status==='fulfilled'?JSON.stringify(x.value,null,2):JSON.stringify({error:x.reason instanceof Error?x.reason.message:'unknown'});
+  const failures=[price,settings].filter(x=>x.status==='rejected').map(x=>x.status==='rejected'&&x.reason instanceof Error?x.reason.message:'API request failed');
+  return {mock:false,pricing:asText(price),settings:asText(settings),endpoints,connectionError:failures.length?failures.join(' · ').slice(0,250):null};
 }
 async function loadAssets(job:StoredJob):Promise<ProviderAsset[]> {
   const ids=[...job.image_asset_ids,...job.audio_asset_ids,...job.video_asset_ids];
@@ -63,6 +147,7 @@ async function loadAssets(job:StoredJob):Promise<ProviderAsset[]> {
 }
 export async function submitVideo(job:StoredJob):Promise<Submission> {
   if(config.mockProvider) return {taskId:`mock-${job.id}`,requiredCredits:0,billingStatus:'mock'};
+  const endpoints=await getProviderApiRoutes(job.org_id);
   const key=await providerKey(job.org_id);
   const assets=await loadAssets(job);
   // Private Supabase Storage remains private; create temporary per-object HTTPS URLs
@@ -79,13 +164,13 @@ export async function submitVideo(job:StoredJob):Promise<Submission> {
   const payload={client_task_id:job.client_task_id,model:job.model,duration:job.duration,ratio:job.ratio,
     resolution:job.resolution,prompt:job.prompt,...urls};
   const init:RequestInit={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)};
-  const result=await providerFetch('/api/generate-video',key,init,90_000);
+  const result=await providerFetch(endpoints.submitPath,key,init,90_000,endpoints.authMode);
   if(result?.status!=='success'||typeof result.task_id!=='string') throw new ProviderError('服务端未返回有效 task_id',200,true);
   return {taskId:result.task_id,requiredCredits:Number.isFinite(Number(result.required_credits))?Number(result.required_credits):null,billingStatus:result.billing_status??'reserved'};
 }
-function safeVideoUrl(url:unknown):string|null {
+function safeVideoUrl(url:unknown,baseUrl:string):string|null {
   if(typeof url!=='string'||!url)return null;
-  try {const u=new URL(url,config.providerUrl);return ['http:','https:'].includes(u.protocol)?u.toString():null;}catch{return null;}
+  try {const u=new URL(url,baseUrl);return ['http:','https:'].includes(u.protocol)?u.toString():null;}catch{return null;}
 }
 export async function pollVideo(job:StoredJob):Promise<PollResult> {
   if(config.mockProvider) {
@@ -93,14 +178,16 @@ export async function pollVideo(job:StoredJob):Promise<PollResult> {
     const progress=Math.min(100,Math.floor(secs/25*100));
     return {status:secs>=25?'success':'polling',progress,videoUrl:null,billingStatus:'mock',errorCode:null,errorMessage:secs>=25?'演示完成；未调用实际视频模型，也没有生成 MP4。':null};
   }
+  const endpoints=await getProviderApiRoutes(job.org_id);
   const key=await providerKey(job.org_id);
-  const result=await providerFetch(`/api/task/${encodeURIComponent(job.provider_task_id??'')}`,key,{},30_000);
+  const result=await providerFetch(taskRoute(endpoints.taskPath,job.provider_task_id??''),key,{},30_000,endpoints.authMode);
   const status=String(result.status??'').toLowerCase();
-  let videoUrl=safeVideoUrl(result.video_url??result.stable_video_url??result.mp4_url);
+  const baseUrl=await getProviderBaseUrl();
+  let videoUrl=safeVideoUrl(result.video_url??result.stable_video_url??result.mp4_url,baseUrl);
   if(status==='success'&&!videoUrl) {
     try {
-      const fallback=await providerFetch(`/api/task/${encodeURIComponent(job.provider_task_id??'')}/video-link`,key,{},15_000);
-      videoUrl=safeVideoUrl(fallback.video_url??fallback.stable_video_url??fallback.mp4_url??fallback.url);
+      const fallback=await providerFetch(taskRoute(endpoints.videoLinkPath,job.provider_task_id??''),key,{},15_000,endpoints.authMode);
+      videoUrl=safeVideoUrl(fallback.video_url??fallback.stable_video_url??fallback.mp4_url??fallback.url,baseUrl);
     }catch{/* provider may delay link publication */}
   }
   const normalized=status==='failed'?'failed':status==='success' && videoUrl?'success':status==='pending'?'pending':'polling';

@@ -12,7 +12,18 @@ export const coreTypeDefs=/* GraphQL */`
   type Organization { id: ID! name: String! slug: String! role: String! createdAt: String }
   type Project { id: ID! orgId: ID! name: String! description: String! jobCount: Int! createdAt: String }
   type Member { userId: ID! name: String! email: String! role: String! joinedAt: String }
-  type ProviderInfo { mock: Boolean! pricing: String! settings: String! baseUrl: String! hasKey: Boolean! }
+  type ProviderApiRoutes {
+    pricingPath: String! settingsPath: String! submitPath: String!
+    taskPath: String! videoLinkPath: String! authMode: String!
+  }
+  input ProviderApiRoutesInput {
+    pricingPath: String! settingsPath: String! submitPath: String!
+    taskPath: String! videoLinkPath: String! authMode: String!
+  }
+  type ProviderInfo {
+    mock: Boolean! pricing: String! settings: String! baseUrl: String! hasKey: Boolean! connectionError: String
+    endpoints: ProviderApiRoutes!
+  }
   type VideoJob {
     id: ID! orgId: ID! projectId: ID clientTaskId: String! providerTaskId: String
     prompt: String! model: String! duration: Int! ratio: String! resolution: String!
@@ -49,6 +60,7 @@ export const coreTypeDefs=/* GraphQL */`
     changeMemberRole(orgId: ID!,userId: ID!,role: String!): Member!
     removeMember(orgId: ID!,userId: ID!): Boolean!
     saveProviderKey(orgId: ID!,key: String!): Boolean!
+    saveProviderApiRoutes(orgId: ID!,input: ProviderApiRoutesInput!): ProviderApiRoutes!
     createVideoJob(orgId: ID!,input: VideoJobInput!): VideoJob!
     resolveSubmission(orgId: ID!,id: ID!,providerTaskId: String,confirmedNotSubmitted: Boolean=false): VideoJob!
   }

@@ -1,0 +1,16 @@
+{
+  "version": "0.6.0",
+  "files": {
+    "apps/api/src/auth/sessions.ts": "228aa608fb4a861bde7fbd0cae5e44e8b488de713ab3b602bf74fdb19c1f7ee5",
+    "apps/api/src/auth/security.ts": "7e5d42a49f219f8e8156b47f7d245ac97e923fca7512ef47174e77c7d3f70824",
+    "apps/api/src/billing/stripe.ts": "07bb362fa003b388e5d4446bb0adad1eeb19763495b5a44d14ba9b70ff85328c",
+    "apps/api/src/billing/common.ts": "f0f1670571332667eb4816d4eb5c93a667f8d4ed699c57959644d876da0578ba",
+    "apps/api/src/worker/runner.ts": "8814f3220cf6fc87e10b7f8ca5a807e7ff24752361b18c162d1221e0588e65b8",
+    "apps/api/src/contracts/operations.ts": "02b489978a632f7b7fa72c5a9cb7f4a59cbdab249a81e30552070f303179c4b8",
+    "sql/001_initial.sql": "01e9a43e2450a54b69ce5849f39d253c31e3d82d75715395870491ee0cadcac3",
+    "sql/002_launcher_port.sql": "7dba57cd2ec96145d9f22bde7bfc706b08483f85c6506eb558014fe8883ec43e",
+    "sql/003_supabase_vercel.sql": "a6aeb74ca7f02f864e31e5fda03ebbe863bf78b70406161c97518c5dd889513b",
+    "sql/004_customer_portal_payments.sql": "6454b368beead05de933ccdea986ff604ff32e77239d11aa2a10d3c3ab45aedd",
+    "sql/005_api_quality.sql": "cf5bd49ef1c13408a94bfffd5a2a0690528b36d9f3a9558a79c712703c6555db"
+  }
+}

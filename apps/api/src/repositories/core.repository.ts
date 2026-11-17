@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import type { ProviderApiRoutes } from '../provider/client.js';
 /** Every query that returns tenant data is scoped by org_id. Authorization is enforced in services. */
 export async function listProjects(orgId:string){
   return (await query(`SELECT p.*,COUNT(v.id)::integer AS job_count FROM projects p LEFT JOIN video_jobs v ON v.project_id=p.id
@@ -66,4 +67,25 @@ export async function removeMember(orgId:string,userId:string){
 }
 export async function storeProviderKey(orgId:string,ciphertext:string|null){
   await query('UPDATE organizations SET provider_license_ciphertext=$2 WHERE id=$1',[orgId,ciphertext]);
+}
+/** Provider interface settings are tenant-owned and kept in PostgreSQL, not Vercel files. */
+export async function hasInFlightVideoJobs(orgId:string):Promise<boolean>{
+  const row=(await query<{active:boolean}>(`SELECT EXISTS(
+    SELECT 1 FROM video_jobs WHERE org_id=$1 AND status IN
+    ('queued','submitting','submission_unknown','pending','polling')
+  ) AS active`,[orgId])).rows[0];
+  return Boolean(row?.active);
+}
+export async function storeProviderApiRoutes(orgId:string,routes:ProviderApiRoutes,userId:string){
+  await query(`INSERT INTO provider_api_routes
+    (org_id,pricing_path,settings_path,submit_path,task_path,video_link_path,auth_mode,updated_by)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+    ON CONFLICT(org_id) DO UPDATE SET
+      pricing_path=excluded.pricing_path,settings_path=excluded.settings_path,
+      submit_path=excluded.submit_path,task_path=excluded.task_path,
+      video_link_path=excluded.video_link_path,auth_mode=excluded.auth_mode,
+      updated_by=excluded.updated_by,updated_at=NOW()`,[
+    orgId,routes.pricingPath,routes.settingsPath,routes.submitPath,
+    routes.taskPath,routes.videoLinkPath,routes.authMode,userId
+  ]);
 }

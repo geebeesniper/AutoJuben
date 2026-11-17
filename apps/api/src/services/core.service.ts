@@ -1,15 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
+import { platformSettings } from '../billing/common.js';
 import { transaction } from '../db/pool.js';
 import { requireMembership,memberships } from '../auth/sessions.js';
 import { encryptSecret } from '../auth/security.js';
-import { providerInfo } from '../provider/client.js';
+import { providerInfo,getProviderBaseUrl,validateProviderApiRoutes,type ProviderApiRoutes } from '../provider/client.js';
 import { AppError,assert } from '../utils/errors.js';
 import type { Context } from '../models/context.js';
 import { isoDate,organizationView,projectView,videoJobView } from '../models/view-models.js';
 import { listProjects,listMembers,dashboardSummary,listJobs,findJob,hasProviderKey,listAudit,appendAudit,
   insertProject,modifyProject,removeProject,findUserByEmail,addMember,memberRole,updateMemberRole,
-  findUserById,removeMember,storeProviderKey } from '../repositories/core.repository.js';
+  findUserById,removeMember,storeProviderKey,storeProviderApiRoutes,hasInFlightVideoJobs } from '../repositories/core.repository.js';
 import { videoJobServiceMutations } from './video-job.service.js';
 const manageRoles=['owner','admin'];
 const editRoles=['owner','admin','editor'];
@@ -37,7 +38,8 @@ export const coreServiceQueries = {
   },
   providerInfo:async (_root:unknown,{orgId}:any,ctx:Context)=>{
     await requireMembership(ctx.user,orgId);const info=await providerInfo(orgId);
-    return {...info,baseUrl:config.providerUrl,hasKey:await hasProviderKey(orgId)||Boolean(config.providerKey)};
+    const global=await platformSettings();
+    return {...info,baseUrl:await getProviderBaseUrl(),hasKey:await hasProviderKey(orgId)||Boolean(global.provider_key_ciphertext||config.providerKey)};
   },
   auditLogs:async (_root:unknown,{orgId,limit}:any,ctx:Context)=>{
     await requireMembership(ctx.user,orgId,manageRoles);
@@ -104,8 +106,19 @@ export const coreServiceMutations = {
   saveProviderKey:async (_root:unknown,{orgId,key}:any,ctx:Context)=>{
     const u=await actor(ctx);await requireMembership(u,orgId,manageRoles);
     const trimmed=String(key??'').trim();assert(trimmed.length<=1024,'卡密过长');
+    assert(!(await hasInFlightVideoJobs(orgId)),
+      '当前工作区仍有处理中或状态未知的视频任务；不能更换 API 密钥',409);
     await storeProviderKey(orgId,trimmed?encryptSecret(trimmed):null);
     await appendAudit(orgId,u.id,trimmed?'provider.keyConfigured':'provider.keyCleared');return true;
+  },
+  saveProviderApiRoutes:async (_root:unknown,{orgId,input}:{orgId:string;input:ProviderApiRoutes},ctx:Context)=>{
+    const u=await actor(ctx);await requireMembership(u,orgId,manageRoles);
+    const safe=validateProviderApiRoutes(input);
+    assert(!(await hasInFlightVideoJobs(orgId)),
+      '该工作区仍有正在运行或等待提交的视频任务，须先完成任务再修改上游接口',409);
+    await storeProviderApiRoutes(orgId,safe,u.id);
+    await appendAudit(orgId,u.id,'provider.apiRoutesUpdated',{routes:safe});
+    return safe;
   },
     ...videoJobServiceMutations
 };

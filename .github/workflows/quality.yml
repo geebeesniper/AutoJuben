@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11bd71901bbe5b163ceaaa4a8d0e9d434f3a2c78 # v4.2.2
+      - uses: actions/checkout@v4 # v4.2.2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -9,3 +9,12 @@ test('enforce 12 total media limit',()=>assert.throws(()=>validateVideoInput({..
 test('reject local URL',()=>assert.throws(()=>validatePublicUrl('https://127.0.0.1/private'),/内网/));
 test('reject insecure HTTP by default',()=>assert.throws(()=>validatePublicUrl('http://example.com/a.jpg'),/HTTPS/));
 test('allow explicitly trusted public HTTP',()=>assert.match(validatePublicUrl('http://example.com/a.jpg',true),/^http:/));
+
+test('safe model identifiers from current provider settings can be submitted without static model allowlist',()=>{
+ assert.equal(validateVideoInput({...base,model:'xinghe-next.3'}).model,'xinghe-next.3');
+});
+test('dynamic provider model ID cannot contain URLs, whitespace or injected content',()=>{
+ for(const model of ['https://internal.example/api','../secret','unknown model','bad/model','a'.repeat(90)]){
+  assert.throws(()=>validateVideoInput({...base,model}),/模型 ID/);
+ }
+});
