@@ -31,4 +31,5 @@ export const adminMutations = {
   adminSetBillingFlags: (_root: unknown, args: any, context: Context) => adminServiceMutations.adminSetBillingFlags(_root, args, context),
   adminSaveStripeIntegration: (_root: unknown, args: any, context: Context) => adminServiceMutations.adminSaveStripeIntegration(_root, args, context),
   adminSaveGlobalVideoKey: (_root: unknown, args: any, context: Context) => adminServiceMutations.adminSaveGlobalVideoKey(_root, args, context),
+  adminSaveGlobalApiRoutes: (_root: unknown, args: any, context: Context) => adminServiceMutations.adminSaveGlobalApiRoutes(_root, args, context),
 };
