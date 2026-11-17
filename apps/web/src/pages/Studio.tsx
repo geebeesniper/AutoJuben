@@ -46,6 +46,9 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
   }
   useEffect(()=>{setStep(0);setProvider(null);void refreshProvider();},[org.id]);
   const knownModels=useMemo(()=>provider?parseModelList(provider.settings):null,[provider?.settings]);
+  const modelOptions=knownModels?knownModels.filter(x=>x.active).map(x=>x.id):['xinghe-2.0','xinghe-fast'];
+  const availableResolutions=knownModels?.find(x=>x.id===model)?.resolutions;
+  const resolutionOptions=availableResolutions?.length?availableResolutions:model==='xinghe-fast'?['480p']:['480p','720p','1080p','4k'];
   const configured=Boolean(provider&&!provider.mock&&provider.hasKey&&!provider.connectionError&&!providerFailure);
 
   const [prompt,setPrompt]=useState('');const [projectId,setProjectId]=useState('');const [model,setModel]=useState('xinghe-2.0');
@@ -174,10 +177,13 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
     </section>}
   </div><aside className="studio-aside"><div className="panel setting-card sticky"><div className="panel-heading"><div><h2><Clapperboard size={18}/> 生成设置</h2><p>配置模型、时长与输出格式</p></div></div>
     <label className="field"><span>所属项目</span><select value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">未分类任务</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-    <label className="field"><span>视频模型</span><div className="segmented two"><button type="button" className={model==='xinghe-2.0'?'selected':''} onClick={()=>{setModel('xinghe-2.0');setResolution('720p');}}>星核 2.0</button><button type="button" className={model==='xinghe-fast'?'selected':''} onClick={()=>{setModel('xinghe-fast');setResolution('480p');}}>Fast</button></div></label>
+    <label className="field"><span>视频模型 · {knownModels?'上游开放列表':'151 推荐模型'}</span><select value={model} disabled={!modelOptions.length} onChange={e=>{const id=e.target.value;setModel(id);const available=knownModels?.find(m=>m.id===id)?.resolutions;setResolution(available?.[0]??(id==='xinghe-fast'?'480p':'720p'));}}>
+      {!modelOptions.includes(model)&&<option value={model}>{model} · 当前不可用</option>}
+      {modelOptions.map(id=><option key={id} value={id}>{id}</option>)}
+    </select></label>
     <label className="field"><span>画面比例</span><div className="segmented two"><button type="button" className={ratio==='9:16'?'selected':''} onClick={()=>setRatio('9:16')}>▯ 9:16 竖屏</button><button type="button" className={ratio==='16:9'?'selected':''} onClick={()=>setRatio('16:9')}>▭ 16:9 横屏</button></div></label>
     <label className="field"><div className="field-inline"><span>视频时长</span><b>{duration} 秒</b></div><input type="range" min="4" max="15" value={duration} onChange={e=>setDuration(Number(e.target.value))}/><div className="field-hint"><span>4 秒</span><span>15 秒</span></div></label>
-    <label className="field"><span>分辨率</span><select value={resolution} onChange={e=>setResolution(e.target.value)}>{(model==='xinghe-fast'?['480p']:['480p','720p','1080p','4k']).map(r=><option key={r} value={r}>{r}</option>)}</select></label>
+    <label className="field"><span>分辨率</span><select value={resolution} onChange={e=>setResolution(e.target.value)}>{!resolutionOptions.includes(resolution)&&<option value={resolution}>{resolution} · 当前不支持</option>}{resolutionOptions.map(r=><option key={r} value={r}>{r}</option>)}</select></label>
     <div className="studio-summary"><div><span>模型</span><b>{model}</b></div><div><span>参考素材</span><b>{totalMedia} 个</b></div><div><span>输出</span><b>{resolution} · {ratio}</b></div></div>
     {step===2&&<button className="btn btn-primary wide create-btn" onClick={nextStep}>确认生成参数 <ArrowRight size={17}/></button>}
     {step===3&&<button className="btn btn-primary wide create-btn" disabled={!ready} onClick={()=>void create()}>{busy?'提交中…':<><Sparkles size={17}/> 提交真实生成任务 <ArrowRight size={17}/></>}</button>}
