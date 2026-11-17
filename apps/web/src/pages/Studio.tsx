@@ -46,13 +46,14 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
   }
   useEffect(()=>{setStep(0);setProvider(null);void refreshProvider();},[org.id]);
   const knownModels=useMemo(()=>provider?parseModelList(provider.settings):null,[provider?.settings]);
-  const modelOptions=knownModels?knownModels.filter(x=>x.active).map(x=>x.id):['xinghe-2.0','xinghe-fast'];
-  const availableResolutions=knownModels?.find(x=>x.id===model)?.resolutions;
-  const resolutionOptions=availableResolutions?.length?availableResolutions:model==='xinghe-fast'?['480p']:['480p','720p','1080p','4k'];
+
   const configured=Boolean(provider&&!provider.mock&&provider.hasKey&&!provider.connectionError&&!providerFailure);
 
   const [prompt,setPrompt]=useState('');const [projectId,setProjectId]=useState('');const [model,setModel]=useState('xinghe-2.0');
   const [ratio,setRatio]=useState('9:16');const [duration,setDuration]=useState(15);const [resolution,setResolution]=useState('720p');
+  const modelOptions=knownModels?knownModels.filter(x=>x.active).map(x=>x.id):['xinghe-2.0','xinghe-fast'];
+  const availableResolutions=knownModels?.find(x=>x.id===model)?.resolutions;
+  const resolutionOptions=availableResolutions?.length?availableResolutions:model==='xinghe-fast'?['480p']:['480p','720p','1080p','4k'];
   const [mediaUrls,setMediaUrls]=useState<Record<Kind,string>>({image:'',audio:'',video:''});
   const [uploads,setUploads]=useState<Record<Kind,UploadedAsset[]>>({image:[],audio:[],video:[]});
   const [busy,setBusy]=useState(false);const [uploading,setUploading]=useState<Kind|null>(null);
