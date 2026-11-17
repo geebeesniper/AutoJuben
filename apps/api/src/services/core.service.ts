@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
+import { platformSettings } from '../billing/common.js';
 import { transaction } from '../db/pool.js';
 import { requireMembership,memberships } from '../auth/sessions.js';
 import { encryptSecret } from '../auth/security.js';
@@ -37,7 +38,8 @@ export const coreServiceQueries = {
   },
   providerInfo:async (_root:unknown,{orgId}:any,ctx:Context)=>{
     await requireMembership(ctx.user,orgId);const info=await providerInfo(orgId);
-    return {...info,baseUrl:config.providerUrl,hasKey:await hasProviderKey(orgId)||Boolean(config.providerKey)};
+    const global=await platformSettings();
+    return {...info,baseUrl:config.providerUrl,hasKey:await hasProviderKey(orgId)||Boolean(global.provider_key_ciphertext||config.providerKey)};
   },
   auditLogs:async (_root:unknown,{orgId,limit}:any,ctx:Context)=>{
     await requireMembership(ctx.user,orgId,manageRoles);
