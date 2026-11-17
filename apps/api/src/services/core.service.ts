@@ -4,7 +4,7 @@ import { platformSettings } from '../billing/common.js';
 import { transaction } from '../db/pool.js';
 import { requireMembership,memberships } from '../auth/sessions.js';
 import { encryptSecret } from '../auth/security.js';
-import { providerInfo,validateProviderApiRoutes,type ProviderApiRoutes } from '../provider/client.js';
+import { providerInfo,getProviderBaseUrl,validateProviderApiRoutes,type ProviderApiRoutes } from '../provider/client.js';
 import { AppError,assert } from '../utils/errors.js';
 import type { Context } from '../models/context.js';
 import { isoDate,organizationView,projectView,videoJobView } from '../models/view-models.js';
