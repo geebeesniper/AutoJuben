@@ -3,13 +3,13 @@ import { findUsers,findOrders,allProducts,allTariffs,findUserEmail,setUserDisabl
   upsertProduct,upsertTariff,deleteTariff,hasActiveProduct,hasActiveTariff,setBillingFlags,
   updateStripeSettings,updateGlobalVideoKey,
   adminStaffRole,adminStaffList,adminSetStaffRole,adminAudit,adminLedgerRows,
-  adminInvestigationRows,adminThreads,adminThreadMessages,adminCreateThread,adminPostMessage,adminChangeThread,adminOverviewRows,anyProviderJobsInFlight,saveGlobalProviderRoutes } from '../repositories/admin.repository.js';
+  adminInvestigationRows,adminThreads,adminThreadMessages,adminCreateThread,adminPostMessage,adminChangeThread,adminOverviewRows,anyProviderJobsInFlight,saveGlobalProviderRoutes,saveGlobalProviderBaseUrl } from '../repositories/admin.repository.js';
 import { isoDate,billingProductView,adminOrderView } from '../models/view-models.js';
 import { encryptSecret } from '../auth/security.js';
 import { config } from '../config.js';
 import { stripeClient } from '../billing/stripe.js';
 import { decryptSecret } from '../auth/security.js';
-import { getGlobalProviderApiRoutes,testGlobalProviderConnection,validateProviderApiRoutes,type ProviderApiRoutes } from '../provider/client.js';
+import { getGlobalProviderApiRoutes,getProviderBaseUrl,validateProviderBaseUrl,testGlobalProviderConnection,validateProviderApiRoutes,type ProviderApiRoutes } from '../provider/client.js';
 import { assert } from '../utils/errors.js';
 import { isPlatformAdmin,platformSettings,stripeCredentials } from '../billing/common.js';
 import type { Context } from '../models/context.js';
@@ -61,8 +61,8 @@ async function billingInfo(){
   webhookUrl:`${config.origin}/api/stripe`};
 }
 async function apiInfo(){
- const [s,routes]=await Promise.all([platformSettings(),getGlobalProviderApiRoutes()]);
- return {baseUrl:config.providerUrl,mock:config.mockProvider,
+ const [s,routes,baseUrl]=await Promise.all([platformSettings(),getGlobalProviderApiRoutes(),getProviderBaseUrl()]);
+ return {baseUrl,mock:config.mockProvider,
   globalKeyConfigured:Boolean(s.provider_key_ciphertext||config.providerKey),endpointEditableInVercel:true,
   routes};
 }
@@ -279,6 +279,15 @@ export const adminServiceMutations={
   assert(columns.length>0,'没有需要保存的配置');
   await updateStripeSettings(columns,values,u.id);
   return billingInfo();
+ },
+ adminSaveGlobalProviderBaseUrl:async (_:unknown,{baseUrl}:{baseUrl:string},ctx:Context)=>{
+  const admin=await asAdmin(ctx,'secrets');
+  assert(!(await anyProviderJobsInFlight()),
+    '平台仍存在处理中或状态未知的任务，必须先处理才能更改上游地址',409);
+  const safe=validateProviderBaseUrl(baseUrl);
+  await saveGlobalProviderBaseUrl(safe,admin.user.id);
+  await adminAudit(admin.user.id,'provider.baseUrlUpdated','platform','global',{origin:safe});
+  return apiInfo();
  },
  adminSaveGlobalApiRoutes:async (_:unknown,{input}:{input:ProviderApiRoutes},ctx:Context)=>{
   const admin=await asAdmin(ctx,'secrets');
