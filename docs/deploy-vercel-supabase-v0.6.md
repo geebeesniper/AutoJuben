@@ -20,7 +20,7 @@ Commit generated `package-lock.json`, change CI from `npm install` to `npm ci` a
 ## 2. Supabase setup
 
 - New project in https://supabase.com/dashboard, enable Email sign-in.
-- SQL Editor: for a **new** DB execute `sql/001_initial.sql`, `002_launcher_port.sql`, `003_supabase_vercel.sql`, `004_customer_portal_payments.sql`, `005_api_quality.sql`, and then `007_provider_api_routes.sql` (workspace-editable upstream video API paths). The independent storyboard `006_script_storyboard.sql` remains staged for review. For an existing DB, back up first and apply **only the migrations that have not already been applied**; never rerun earlier migrations blindly.
+- SQL Editor: for a **new** DB execute `sql/001_initial.sql`, `002_launcher_port.sql`, `003_supabase_vercel.sql`, `004_customer_portal_payments.sql`, `005_api_quality.sql`, then `007_provider_api_routes.sql` (workspace-specific API paths) and **review/apply `008_enterprise_admin.sql`** (global editable provider base URL/routes, enterprise roles, customer help, monitoring). The independent storyboard `006_script_storyboard.sql` remains staged for separate review. For an existing DB, back up first and apply **only the migrations that have not already been applied**; never rerun earlier migrations blindly.
 - Storage: create private bucket `autojuben-media`.
 - Connect → Transaction pooler: copy the real connection string (`:6543`) into `DATABASE_URL`; use URL-encoded password. Node `pg` uses no named prepared statements. Keep DB password server-side.
 - Auth → URL Configuration: set Site URL to the actual Vercel domain and allow `https://YOUR_DOMAIN/?auth=reset` callback.
@@ -47,6 +47,8 @@ Commit generated `package-lock.json`, change CI from `npm install` to `npm ci` a
 
 - Use `setup/supabase_cron.sql` with Vercel endpoint and CRON_SECRET (store secrets safely, e.g., Supabase Vault). Cron processes jobs in small bounded batches, not permanent in-memory background loops.
 - Stripe webhook URL: `https://YOUR_DOMAIN/api/stripe`. Configure signing secret and exact event types from `docs/payment-security.md`. Stripe Customer Portal handles card editing; system does not store PAN/CVV.
+- Admin → API Integration can edit the global Base URL (only trusted origins from `VIDEO_API_ALLOWED_ORIGINS`), five provider paths, auth header and encrypted default API Key. Workspace Settings overrides paths and secret independently. Editing global origins/routes is refused while there are in-flight/unknown video jobs.
+- `MOCK_VIDEO_PROVIDER` stays a server environment setting because the frozen job worker must not silently change billing behavior at runtime; it is not an editable browser toggle.
 - 151 video provider base URL currently HTTP: keep `MOCK_VIDEO_PROVIDER=true` and `ALLOW_INSECURE_VIDEO_HTTP=false` until vendor supports HTTPS and API credentials can be sent securely.
 
 ## 6. Operation + rollback
