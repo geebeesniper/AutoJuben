@@ -16,7 +16,9 @@ type Order={id:string;userName:string;email:string;orgId:string;orgName:string;p
 type Product={id:string;sku:string;name:string;description:string;credits:number;amountCents:number;currency:string;active:boolean};
 type Tariff={model:string;resolution:string;credits:number;active:boolean};
 type Gateway={paymentsEnabled:boolean;usageBillingEnabled:boolean;stripeSecretConfigured:boolean;webhookSecretConfigured:boolean;portalConfigured:boolean;stripeMode:string;webhookUrl:string};
-type ApiInfo={baseUrl:string;mock:boolean;globalKeyConfigured:boolean;endpointEditableInVercel:boolean};
+type ProviderRoutes={pricingPath:string;settingsPath:string;submitPath:string;taskPath:string;videoLinkPath:string;authMode:'license_key'|'bearer'};
+const defaultRoutes:ProviderRoutes={pricingPath:'/api/pricing',settingsPath:'/api/public-settings',submitPath:'/api/generate-video',taskPath:'/api/task/{task_id}',videoLinkPath:'/api/task/{task_id}/video-link',authMode:'license_key'};
+type ApiInfo={baseUrl:string;mock:boolean;globalKeyConfigured:boolean;endpointEditableInVercel:boolean;routes:ProviderRoutes};
 const money=(n:number)=>'$'+(n/100).toFixed(2);
 
 const validDateEnd=(s:string)=>s?new Date(Date.parse(s)+86400000).toISOString():'';
@@ -125,13 +127,104 @@ function GatewayPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
  <section className="panel portal-card"><div className="portal-card-heading"><Coins size={21}/><h2>视频任务积分价格</h2></div><div className="portal-mini-list">{tariffs.map(t=><button key={`${t.model}-${t.resolution}`} className="portal-edit-row" onClick={()=>setTariff(t)}><div><b>{t.model} / {t.resolution}</b><small>{t.credits} Credits / Task</small></div><span className={`portal-status ${t.active?'paid':'checkout'}`}>{t.active?'启用':'停用'}</span></button>)}{!tariffs.length&&<p className="portal-help">未设置任何视频任务计费价格。</p>}</div><form className="portal-editor" onSubmit={e=>void saveTariff(e)}><b>模型计费规则</b><label className="field"><span>模型</span><select value={tariff.model} onChange={e=>setTariff({...tariff,model:e.target.value})}><option value="xinghe-2.0">xinghe-2.0</option><option value="xinghe-fast">xinghe-fast</option></select></label><label className="field"><span>清晰度</span><select value={tariff.resolution} onChange={e=>setTariff({...tariff,resolution:e.target.value})}>{['480p','720p','1080p','4k'].map(v=><option key={v} value={v}>{v}</option>)}</select></label><label className="field"><span>每任务使用积分</span><input type="number" min={1} value={tariff.credits} onChange={e=>setTariff({...tariff,credits:Number(e.target.value)})}/></label><label className="portal-checkbox"><input type="checkbox" checked={tariff.active} onChange={e=>setTariff({...tariff,active:e.target.checked})}/> 启用此价格</label><div className="portal-btn-row"><button className="btn btn-primary" type="submit" disabled={busy==='tariff'}><Save size={16}/>保存价格</button></div></form><p className="portal-help">这是本平台积分规则，不是 151 视频提供商的实时报价。请自行设置售价与服务成本，不建议直接写死上游价格。</p></section></div></>;
 }
 function ApiPage({onNotify}:{onNotify:(m:string,ok?:boolean)=>void}){
- const [info,setInfo]=useState<ApiInfo|null>(null),[key,setKey]=useState(''),[busy,setBusy]=useState(false),[show,setShow]=useState(false);
- async function load(){try{setInfo((await gql<{adminApiSettings:ApiInfo}>(`query{adminApiSettings{baseUrl mock globalKeyConfigured endpointEditableInVercel}}`)).adminApiSettings);}catch(e){onNotify(e instanceof Error?e.message:'接口状态读取失败');}}
+ const [info,setInfo]=useState<ApiInfo|null>(null),[role,setRole]=useState<RoleInfo|null>(null);
+ const [routes,setRoutes]=useState<ProviderRoutes>(defaultRoutes),[key,setKey]=useState('');
+ const [loading,setLoading]=useState(true),[busy,setBusy]=useState(''),[show,setShow]=useState(false),[error,setError]=useState('');
+ const canEdit=role?.capabilities.includes('secrets')??false;
+ const routeFields:{field:keyof Omit<ProviderRoutes,'authMode'>;method:string;label:string}[]=[
+   {field:'pricingPath',method:'GET',label:'Pricing · 价格查询'},
+   {field:'settingsPath',method:'GET',label:'Public Settings · 模型列表'},
+   {field:'submitPath',method:'POST',label:'Generate Video · 提交任务'},
+   {field:'taskPath',method:'GET',label:'Task Status · 进度轮询'},
+   {field:'videoLinkPath',method:'GET',label:'Video Link · 视频结果'}
+ ];
+ const dirty=!!info&&JSON.stringify(info.routes)!==JSON.stringify(routes);
+ async function load(){
+  setLoading(true);
+  try{
+   const r=await gql<{adminApiSettings:ApiInfo;adminMyRole:RoleInfo}>(`query{adminApiSettings{baseUrl mock globalKeyConfigured endpointEditableInVercel routes{pricingPath settingsPath submitPath taskPath videoLinkPath authMode}} adminMyRole{role capabilities}}`);
+   setInfo(r.adminApiSettings);setRole(r.adminMyRole);setRoutes(r.adminApiSettings.routes);setError('');
+  }catch(e){setError(e instanceof Error?e.message:'API 集成配置读取失败');}
+  finally{setLoading(false);}
+ }
  useEffect(()=>{void load();},[]);
- async function save(){setBusy(true);try{await gql(`mutation($key:String!){adminSaveGlobalVideoKey(key:$key){globalKeyConfigured}}`,{key});setKey('');onNotify('全平台默认 API Key 已更新',true);await load();}catch(e){onNotify(e instanceof Error?e.message:'保存失败');}finally{setBusy(false);}}
- async function test(){setBusy(true);try{const r=await gql<{adminTestVideoApi:{ok:boolean;message:string}}>('query{adminTestVideoApi{ok message}}');onNotify(r.adminTestVideoApi.message,r.adminTestVideoApi.ok);}catch(e){onNotify(e instanceof Error?e.message:'测试失败');}finally{setBusy(false);}}
- return <><Head tag="ADMIN / API INTEGRATIONS" title="API 集成中心" body="管理 151 视频 API 默认密钥，查看当前上游环境。工作区可单独覆盖自己的 X-License-Key。"/><div className="portal-two-columns"><section className="panel portal-card"><div className="portal-card-heading"><CloudCog size={22}/><h2>视频 API 配置</h2></div><div className="portal-info-row"><span>上游 API Endpoint</span><code>{info?.baseUrl??'加载中…'}</code></div><div className="portal-info-row"><span>运行模式</span><b>{info?.mock?'MOCK / DEMO':'LIVE PROVIDER'}</b></div><div className="portal-info-row"><span>全局默认卡密</span><b>{info?.globalKeyConfigured?'已配置':'未配置'}</b></div>{info?.baseUrl.startsWith('http://')&&!info.mock&&<div className="notice danger inline"><ShieldAlert size={17}/>上游仍为 HTTP，不适合传输真实密钥。建议服务商配置 HTTPS。</div>}<div className="portal-divider"/><label className="field"><span>默认 X-License-Key</span><div className="portal-input-suffix"><input type={show?'text':'password'} value={key} onChange={e=>setKey(e.target.value)} placeholder="输入新卡密；空值保存可清除数据库覆盖"/><button onClick={()=>setShow(x=>!x)} className="icon-btn">{show?'隐藏':'显示'}</button></div></label><div className="portal-btn-row"><button className="btn btn-primary" disabled={busy} onClick={()=>void save()}><Save size={15}/>保存 API 密钥</button></div></section>
- <section className="panel portal-card"><div className="portal-card-heading"><ShieldCheck size={22}/><h2>连接与安全设置</h2></div><div className="portal-step"><span>01</span><div><b>Vercel 环境变量</b><p>通过 VIDEO_API_BASE_URL 修改上游 API 地址；配置 MOCK_VIDEO_PROVIDER=false 才真正发送任务。</p></div></div><div className="portal-step"><span>02</span><div><b>统一密钥优先级</b><p>工作区专属密钥 → 管理员默认密钥 → Vercel VIDEO_API_LICENSE_KEY。</p></div></div><div className="portal-step"><span>03</span><div><b>API 使用和状态</b><p>工作区的「平台设置」页面可读取 /api/pricing 与 /api/public-settings，不显示真实密钥。</p></div></div><div className="portal-btn-row"><button className="btn btn-ghost" onClick={()=>void load()}><RefreshCw size={16}/>刷新状态</button><button className="btn btn-primary" disabled={busy} onClick={()=>void test()}><Activity size={16}/>测试 API 连接</button></div></section></div></>;
+ async function saveKey(){
+  if(!canEdit)return;
+  setBusy('key');
+  try{await gql(`mutation($key:String!){adminSaveGlobalVideoKey(key:$key){globalKeyConfigured}}`,{key});
+   setKey('');onNotify('全平台默认 API 密钥已加密保存',true);await load();
+  }catch(e){setError(e instanceof Error?e.message:'API Key 保存失败');}
+  finally{setBusy('');}
+ }
+ async function saveRoutes(){
+  if(!canEdit||!dirty)return;
+  setBusy('routes');
+  try{
+   await gql(`mutation($input:ProviderApiRoutesInput!){adminSaveGlobalApiRoutes(input:$input){routes{pricingPath settingsPath submitPath taskPath videoLinkPath authMode}}}`,{input:routes});
+   onNotify('接口定义已保存到平台数据库并记录审计',true);await load();
+  }catch(e){setError(e instanceof Error?e.message:'接口定义保存失败');}
+  finally{setBusy('');}
+ }
+ async function test(){
+  setBusy('test');
+  try{
+   const r=await gql<{adminTestVideoApi:{ok:boolean;message:string}}>(`query{adminTestVideoApi{ok message}}`);
+   onNotify(r.adminTestVideoApi.message,r.adminTestVideoApi.ok);
+   if(!r.adminTestVideoApi.ok)setError(r.adminTestVideoApi.message);
+   else setError('');
+  }catch(e){setError(e instanceof Error?e.message:'连接测试失败');}
+  finally{setBusy('');}
+ }
+ return <><Head tag="ADMIN / API INTEGRATIONS" title="API 集成中心" body="全局默认上游 API 设置。修改会实际影响未设置独立接口的工作区；工作区专属配置优先。"/>
+  {error&&<div className="notice danger" role="alert"><ShieldAlert size={17}/>{error}</div>}
+  <section className="panel portal-card">
+   <div className="portal-card-heading"><CloudCog size={22}/><h2>上游视频服务 · 全局配置</h2><button className="btn btn-ghost" disabled={loading||!!busy} onClick={()=>void load()}><RefreshCw size={15}/>刷新</button></div>
+   <div className="admin-api-status-grid">
+    <div><small>运行模式</small><b>{!info?'尚未连接':info.mock?'MOCK — 不请求真实 API':'LIVE — 连接真实服务'}</b></div>
+    <div><small>默认凭据</small><b>{info?.globalKeyConfigured?'已配置（不显示明文）':'未配置'}</b></div>
+    <div><small>管理员权限</small><b>{role?.role??'读取中'} · {canEdit?'可编辑':'只读'}</b></div>
+   </div>
+   <div className="portal-info-row"><span>API Base URL（Vercel 服务器配置）</span><code>{info?.baseUrl??'正在读取…'}</code></div>
+   <p className="portal-help">基础域名仍由服务器的 VIDEO_API_BASE_URL 控制，禁止在网页填入任意主机以免泄漏密钥。下方五个路径及鉴权 Header 可以直接保存至数据库。</p>
+   <div className="portal-divider"/>
+   <div className="portal-card-heading"><ServerCog size={20}/><h2>接口定义 · 151 API</h2><span className="portal-status pending">{dirty?'有未保存修改':'与数据库一致'}</span></div>
+   <div className="admin-api-routes">
+    {routeFields.map(({field,method,label})=><label key={field}>
+      <span><b>{label}</b><small>{method}</small></span>
+      <input value={routes[field]} maxLength={160} spellCheck={false} autoComplete="off"
+       disabled={!canEdit||loading||!!busy||!info}
+       onChange={e=>setRoutes(p=>({...p,[field]:e.target.value}))}/>
+    </label>)}
+    <label><span><b>认证模式 Authentication</b><small>HEADER</small></span><select value={routes.authMode} disabled={!canEdit||loading||!!busy||!info}
+       onChange={e=>setRoutes(p=>({...p,authMode:e.target.value as ProviderRoutes['authMode']}))}>
+       <option value="license_key">X-License-Key</option><option value="bearer">Authorization: Bearer</option>
+    </select></label>
+   </div>
+   <p className="portal-help">路径格式必须是 /api/…；Task Status 和 Video Link 必须包含 {'{task_id}'}。为防止丢失任务，平台仍有待处理/状态未知的视频时禁止修改全局接口。此处不执行视频 POST，也不自动扣费。</p>
+   <div className="portal-btn-row">
+    <button className="btn btn-ghost" disabled={!canEdit||!!busy||loading} onClick={()=>setRoutes({...defaultRoutes})}>恢复 151 默认路径（未保存）</button>
+    <button className="btn btn-ghost" disabled={!dirty||!!busy} onClick={()=>setRoutes(info?{...info.routes}:{...defaultRoutes})}>取消修改</button>
+    <button className="btn btn-primary" disabled={!canEdit||!dirty||!!busy||loading} onClick={()=>void saveRoutes()}><Save size={15}/>{busy==='routes'?'保存中…':'保存接口配置'}</button>
+   </div>
+  </section>
+  <div className="portal-two-columns">
+   <section className="panel portal-card">
+    <div className="portal-card-heading"><KeyRound size={20}/><h2>全平台默认 API Key</h2></div>
+    <p className="portal-help">密钥由服务器加密保存；仅 Super Admin 可写入。工作区有自己的 API Key 时优先使用工作区密钥。</p>
+    <label className="field"><span>默认密钥（仅输入新值）</span><div className="portal-input-suffix"><input type={show?'text':'password'} value={key} maxLength={1024} autoComplete="new-password" disabled={!canEdit||!!busy}
+     onChange={e=>setKey(e.target.value)} placeholder={info?.globalKeyConfigured?'已配置，输入新值以替换':'尚未配置'}/><button type="button" className="icon-btn" aria-label="显示或隐藏新密钥" onClick={()=>setShow(v=>!v)}>{show?'隐藏':'显示'}</button></div></label>
+    <div className="portal-btn-row"><button className="btn btn-primary" disabled={!canEdit||!!busy||loading||!key.trim()} onClick={()=>void saveKey()}><Save size={15}/>保存密钥</button></div>
+    <p className="portal-help">不显示现有密钥，也不会把密钥写入浏览器 Local Storage、源码或审计记录。</p>
+   </section>
+   <section className="panel portal-card">
+    <div className="portal-card-heading"><Activity size={20}/><h2>连接诊断 · Read-only</h2></div>
+    <p className="portal-help">测试时调用服务器实际的 Pricing GET 和 Public Settings GET，使用已保存的路径与鉴权方式。不创建视频任务、不触发收费。</p>
+    {info?.mock&&<div className="notice"><ShieldAlert size={16}/>MOCK_VIDEO_PROVIDER=true；真实测试不可执行。必须在 Vercel 改成 LIVE 才能发起真实请求。</div>}
+    {info?.baseUrl.startsWith('http://')&&!info.mock&&<div className="notice danger"><ShieldAlert size={16}/>当前基础地址使用 HTTP。除非服务器明确允许，否则不会发送任何 API 密钥。</div>}
+    <div className="portal-btn-row"><button className="btn btn-primary" disabled={!!busy||loading||!info||dirty||info.mock||!info.globalKeyConfigured} onClick={()=>void test()}><Activity size={16}/>{busy==='test'?'测试中…':'测试实际 API 连接'}</button></div>
+   </section>
+  </div>
+ </>;
 }
 
 function StaffPage({onNotify}:{onNotify:(s:string,ok?:boolean)=>void}){
