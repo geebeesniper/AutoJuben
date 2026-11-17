@@ -44,12 +44,7 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
     }catch(e){setProvider(null);setProviderFailure(e instanceof Error?e.message:'接口配置读取失败');}
     finally{setProviderLoading(false);}
   }
-  useEffect(()=>{
-    setStep(0);setProvider(null);setPrompt('');setProjectId('');setModel('xinghe-2.0');
-    setRatio('9:16');setDuration(15);setResolution('720p');
-    setMediaUrls({image:'',audio:'',video:''});setUploads({image:[],audio:[],video:[]});
-    taskId.current=crypto.randomUUID();void refreshProvider();
-  },[org.id]);
+
   const knownModels=useMemo(()=>provider?parseModelList(provider.settings):null,[provider?.settings]);
 
   const configured=Boolean(provider&&!provider.mock&&provider.hasKey&&!provider.connectionError&&!providerFailure);
@@ -65,6 +60,12 @@ export function Studio({org,projects,onCreated,onNotify}:{org:Org;projects:Proje
   const taskId=useRef(crypto.randomUUID());
   const currentOrg=useRef(org.id);
   currentOrg.current=org.id;
+  useEffect(()=>{
+    setStep(0);setProvider(null);setPrompt('');setProjectId('');setModel('xinghe-2.0');
+    setRatio('9:16');setDuration(15);setResolution('720p');
+    setMediaUrls({image:'',audio:'',video:''});setUploads({image:[],audio:[],video:[]});
+    taskId.current=crypto.randomUUID();void refreshProvider();
+  },[org.id]);
   const totalMedia=Object.values(mediaUrls).reduce((n,s)=>n+lines(s).length,0)+Object.values(uploads).reduce((n,files)=>n+files.length,0);
   const imageCount=lines(mediaUrls.image).length+uploads.image.length;
   const audioCount=lines(mediaUrls.audio).length+uploads.audio.length;
