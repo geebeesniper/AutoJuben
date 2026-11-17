@@ -58,6 +58,7 @@ export const adminTypeDefs=/* GraphQL */`
   adminSaveStripeIntegration(secretKey: String,webhookSecret: String,portalConfig: String): AdminBillingSettings!
   adminSaveGlobalVideoKey(key: String!): AdminApiSettings!
   adminSaveGlobalApiRoutes(input: ProviderApiRoutesInput!): AdminApiSettings!
+  adminSaveGlobalProviderBaseUrl(baseUrl: String!): AdminApiSettings!
  }
 `;
 export { adminQueries, adminMutations } from '../controllers/admin.controller.js';
