@@ -4,6 +4,7 @@
 -- Global provider API route defaults are editable by super admin and persisted on the existing platform settings owner.
 -- Workspace-specific overrides in SQL 007 take precedence. SQL 004 remains protected/frozen.
 ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS provider_routes JSONB;
+ALTER TABLE public.platform_settings ADD COLUMN IF NOT EXISTS provider_base_url TEXT;
 ALTER TABLE public.platform_settings ADD CONSTRAINT platform_provider_routes_is_object
   CHECK(provider_routes IS NULL OR jsonb_typeof(provider_routes)='object');
 
