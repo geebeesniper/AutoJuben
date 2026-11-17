@@ -38,15 +38,38 @@ export function validateProviderApiRoutes(candidate:ProviderApiRoutes):ProviderA
   if(!['license_key','bearer'].includes(candidate.authMode))throw new AppError(400,'不支持的 API 鉴权方式');
   return candidate;
 }
+export async function getGlobalProviderApiRoutes():Promise<ProviderApiRoutes>{
+ const row=(await query<{provider_routes:ProviderApiRoutes|null}>(
+   'SELECT provider_routes FROM platform_settings WHERE id=1')).rows[0];
+ return row?.provider_routes?validateProviderApiRoutes(row.provider_routes):{...defaultProviderApiRoutes};
+}
+/** A tenant may override global paths. All provider operations share the same effective routes. */
 export async function getProviderApiRoutes(orgId:string):Promise<ProviderApiRoutes> {
   const row=(await query<{
     pricing_path:string;settings_path:string;submit_path:string;task_path:string;video_link_path:string;auth_mode:'license_key'|'bearer';
   }>('SELECT pricing_path,settings_path,submit_path,task_path,video_link_path,auth_mode FROM provider_api_routes WHERE org_id=$1',[orgId])).rows[0];
-  if(!row)return {...defaultProviderApiRoutes};
+  if(!row)return getGlobalProviderApiRoutes();
   return validateProviderApiRoutes({
     pricingPath:row.pricing_path,settingsPath:row.settings_path,submitPath:row.submit_path,
     taskPath:row.task_path,videoLinkPath:row.video_link_path,authMode:row.auth_mode
   });
+}
+/** Read-only GET probe: reuses the actual provider HTTP client and header/redirect rules. */
+export async function testGlobalProviderConnection():Promise<{ok:boolean;message:string}>{
+ if(config.mockProvider)return {ok:false,message:'当前 MOCK_VIDEO_PROVIDER=true：没有请求真实 API。请在 Vercel 环境变量改为 false 后重新测试。'};
+ const global=await getGlobalProviderApiRoutes();
+ const settings=await platformSettings();
+ const key=settings.provider_key_ciphertext?decryptSecret(settings.provider_key_ciphertext):config.providerKey;
+ if(!key)return {ok:false,message:'没有全平台默认 API Key，请先在 API 集成中心保存。'};
+ try{
+  const [pricing,models]=await Promise.all([
+   providerFetch(global.pricingPath,key,{},10000,global.authMode),
+   providerFetch(global.settingsPath,key,{},10000,global.authMode)
+  ]);
+  return {ok:true,message:'真实 API 请求成功：Pricing 与 Public Settings 均返回可解析的 JSON。'};
+ }catch(err){
+  return {ok:false,message:err instanceof Error?err.message.slice(0,180):'视频 API 连接失败'};
+ }
 }
 function taskRoute(template:string,taskId:string):string {
   if(!taskId||taskId.length>160)throw new AppError(400,'视频任务 ID 无效');
