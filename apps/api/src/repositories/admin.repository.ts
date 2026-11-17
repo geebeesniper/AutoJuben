@@ -52,6 +52,9 @@ export async function anyProviderJobsInFlight():Promise<boolean>{
   SELECT 1 FROM video_jobs WHERE status IN ('queued','submitting','submission_unknown','pending','polling')
  ) AS busy`)).rows[0]?.busy);
 }
+export async function saveGlobalProviderBaseUrl(baseUrl:string,actorId:string){
+ await query('UPDATE platform_settings SET provider_base_url=$1,updated_by=$2,updated_at=NOW() WHERE id=1',[baseUrl,actorId]);
+}
 export async function saveGlobalProviderRoutes(routes:ProviderApiRoutes,actorId:string){
  await query('UPDATE platform_settings SET provider_routes=$1::jsonb,updated_by=$2,updated_at=NOW() WHERE id=1',[JSON.stringify(routes),actorId]);
 }
