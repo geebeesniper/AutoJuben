@@ -165,6 +165,19 @@
 .help-chat-history article b{font-size:11px;color:#4866a4}.help-chat-history article p{margin:8px 0;color:#3a5376;font-size:12px;white-space:pre-wrap;line-height:1.7}.help-chat-history article small{font-size:9px;color:#8c9caf}
 .help-chat-compose{padding:13px;display:flex;gap:9px;align-items:flex-end;border-top:1px solid #e2e9f4}.help-chat-compose textarea{min-width:0;flex:1}.help-chat-compose button{flex-shrink:0}
 
+/* Platform API Integration: editable controls belong to original admin styles, not patches. */
+.admin-api-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 23px}
+.admin-api-status-grid>div{display:flex;flex-direction:column;gap:7px;padding:16px;border-radius:10px;background:#f6f9fe;border:1px solid #e4eaf4}
+.admin-api-status-grid small{font-size:10px;color:#7f8ea9}.admin-api-status-grid b{font-size:12px;color:#354c6f;line-height:1.5;overflow-wrap:anywhere}
+.admin-api-routes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:20px 0}
+.admin-api-routes label{min-width:0;display:flex;flex-direction:column;gap:10px;color:#394d70}
+.admin-api-routes label>span{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.admin-api-routes label b{font-size:12px}.admin-api-routes label small{font-size:9px;font-weight:850;color:#5e72ac;background:#edf1ff;padding:5px 9px;border-radius:6px}
+.admin-api-routes input,.admin-api-routes select{width:100%;min-width:0;background:#fbfcff;border:1px solid #dbe3f1;border-radius:9px;color:#354866;font:600 12px/1.5 monospace;padding:11px 12px}
+.admin-api-routes input:focus,.admin-api-routes select:focus{border-color:#7d91dd;box-shadow:0 0 0 3px #e1e7ff}
+.admin-api-routes input:disabled,.admin-api-routes select:disabled{opacity:.65;background:#f3f5f9}
+@media(max-width:840px){.admin-api-status-grid,.admin-api-routes{grid-template-columns:1fr}}
+
 @media (max-width:1240px){.portal-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.portal-admin-status{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:820px){.help-desk-layout{grid-template-columns:1fr}.help-ticket-list{border-right:0;border-bottom:1px solid #e2e9f4;max-height:240px}.admin-messenger-layout{grid-template-columns:1fr}.admin-thread-list{border-right:0;border-bottom:1px solid #e4ebf4;max-height:230px}.admin-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.portal-two-columns{grid-template-columns:1fr}.portal-card-grid{grid-template-columns:1fr}.portal-product-grid{grid-template-columns:1fr}.portal-card-footer{align-items:flex-start;flex-direction:column}.portal-search-bar{flex-wrap:wrap}.portal-search-bar input{flex:1;min-width:150px}}
 @media (max-width:520px){.help-create-form{grid-template-columns:1fr}.help-chat-compose{flex-direction:column;align-items:stretch}.help-ticket-chat>header{flex-direction:column;align-items:flex-start}.admin-details-grid{grid-template-columns:1fr}.admin-ledger-summary{gap:9px}.admin-filter-bar label{flex-basis:100%}.admin-chat-head{flex-direction:column;align-items:flex-start}.admin-chat-compose{flex-direction:column;align-items:stretch}.portal-card{padding:18px}.portal-admin-status{grid-template-columns:1fr 1fr;gap:10px}.portal-wallet{padding:17px}.portal-wallet b{font-size:27px}.portal-form-dual{grid-template-columns:1fr}.portal-product{min-height:240px}}
